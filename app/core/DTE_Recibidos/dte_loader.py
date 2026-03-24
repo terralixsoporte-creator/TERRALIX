@@ -1,51 +1,22 @@
 ﻿# Script Control:
-# - Role: SQLite schema, OCR fallback, and persistence utilities.
-# - Track file: docs/SCRIPT_CONTROL.md
+# - Role: SQLite schema and persistence utilities for DTE Recibidos.
 import os
 import re
 import warnings
-from datetime import datetime
-from sqlalchemy import create_engine, Table, Column, Integer, String, Float, Date, MetaData, ForeignKey, TIMESTAMP, text, select, event
-from sqlalchemy.engine import Engine
-try:
-    import easyocr
-except Exception:
-    easyocr = None
-try:
-    import cv2
-except Exception:
-    cv2 = None
-try:
-    from ultralytics import YOLO
-except Exception:
-    YOLO = None
-try:
-    import fitz
-except Exception:
-    fitz = None
-try:
-    from PIL import Image
-except Exception:
-    Image = None
 import io
 import json
 import unicodedata
 import shutil
-from typing import List
-try:
-    from transformers import AutoTokenizer, AutoModelForMaskedLM, pipeline
-except Exception:
-    AutoTokenizer = None
-    AutoModelForMaskedLM = None
-    pipeline = None
-# Stubs de IA (se sobreescriben solo si AI estÃ¡ habilitada y el mÃ³dulo existe)
-def analizar_detalle_desde_imagen(*args, **kwargs):
-    return {"ok": False, "error": "ai_disabled"}
-def categorizar_items_por_ai(*args, **kwargs):
-    return {"ok": False, "error": "ai_disabled"}
 import sys
+from datetime import datetime
 from pathlib import Path
+from typing import List
 from dotenv import load_dotenv
+from sqlalchemy import (
+    create_engine, Table, Column, Integer, String, Float,
+    Date, MetaData, ForeignKey, TIMESTAMP, text, select, event,
+)
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 
 # === BASE PATH (raÃ­z del proyecto TERRALIX) ===
@@ -80,45 +51,9 @@ try:
 except Exception:
     pass
 os.makedirs(RUTA_PDF, exist_ok=True)
-# Logs simplificados: evitar prints innecesarios
-AI_DETALLE_ENABLED = os.getenv("AI_DETALLE_ENABLED", "true").lower() == "true"
-AI_DETALLE_DEBUG = os.getenv("AI_DETALLE_DEBUG", "false").lower() == "true"
-_AI_DETALLE_DISABLED_RUNTIME = False
-if AI_DETALLE_ENABLED:
-    try:
-        # Import tardÃ­o para evitar fallo si no estÃ¡ instalado openai
-        try:
-            from .ai_openai import analizar_detalle_desde_imagen as _an, categorizar_items_por_ai as _cat
-        except Exception:
-            from ai_openai import analizar_detalle_desde_imagen as _an, categorizar_items_por_ai as _cat
-        analizar_detalle_desde_imagen = _an  # type: ignore
-        categorizar_items_por_ai = _cat      # type: ignore
-    except Exception as _e:
-        print(f"âš ï¸ IA deshabilitada (no disponible): {_e}")
-        _AI_DETALLE_DISABLED_RUNTIME = True
 
 # === MODELOS ===
-MODEL_PATH = resource_path(str(BASE_DIR / "app/core/DTE_Recibidos/YOLOv11Model.pt"))
-
-if YOLO:
-    try:
-        model = YOLO(MODEL_PATH)
-    except Exception:
-        model = None
-else:
-    model = None
-
-# --- EasyOCR: fallback a CPU si no hay GPU ---
-if easyocr:
-    try:
-        reader = easyocr.Reader(['es', 'en'], gpu=True)
-    except Exception:
-        try:
-            reader = easyocr.Reader(['es', 'en'], gpu=False)
-        except Exception:
-            reader = None
-else:
-    reader = None
+# (YOLO y EasyOCR eliminados — la lectura de PDFs se hace via ai_reader.py)
 
 # ============================================================
 # ðŸ§± CONEXIÃ“N Y ESTRUCTURA DE LA BASE DE DATOS
@@ -529,27 +464,6 @@ def parse_id_doc_referencia(ref_text: str) -> str | None:
 # ðŸ§© OCR UTILIDADES
 # ============================================================
 
-def pdf_a_imagen(pdf_path, output_dir=resource_path(str(BASE_DIR / "data/temp_images"))):
-    if not fitz or not Image:
-        return None
-    os.makedirs(output_dir, exist_ok=True)
-    doc = fitz.open(pdf_path)
-    page = doc[0]
-    pix = page.get_pixmap(dpi=200)
-    img_path = os.path.join(output_dir, os.path.splitext(os.path.basename(pdf_path))[0] + ".jpg")
-    img = Image.open(io.BytesIO(pix.tobytes("jpg")))
-    img.save(img_path, "JPEG")
-    doc.close()
-    return img_path
-
-def mejorar_imagen(img):
-    if not cv2:
-        return img
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    gray = cv2.convertScaleAbs(gray, alpha=1.1, beta=10)
-    gray = cv2.GaussianBlur(gray, (3, 3), 0)
-    _, thr = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
-    return cv2.cvtColor(thr, cv2.COLOR_GRAY2BGR)
 
 # ============================================================
 # ðŸ’¾ GUARDAR EN BD
@@ -597,20 +511,6 @@ def _insertar_items_detalle(conn, doc_id: str, items: list[dict]):
             "Descuento": (it.get("descuento", 0)),
             "monto_item": (it.get("monto_item", 0))
         }
-        if AI_DETALLE_DEBUG:
-            try:
-                print(
-                    f"ðŸ§ª InserciÃ³n detalle: id_det={doc_id}:{idx} | "
-                    f"codigo='{row['codigo']}' | descripcion='{row['descripcion']}' | "
-                    f"cantidad={row['cantidad']} | precio_unitario={row['precio_unitario']} | "
-                    f"impuesto_adicional={row['impuesto_adicional']} | descuento={row['Descuento']} | "
-                    f"monto_item={row['monto_item']}"
-                    f"categoria={str(it.get("categoria", "")).strip()}"
-                    f"subcategoria: {str(it.get("subcategoria", "")).strip()}"
-                    f"tipo_gasto: {str(it.get("tipo_gasto", "")).strip()}"
-                )
-            except Exception:
-                print("(no se pudo imprimir la lÃ­nea antes de insertar)")
         try:
             conn.execute(detalle.insert().values(**row))
         except Exception as e:
@@ -669,30 +569,6 @@ def guardar_en_bd(datos_raw, ruta_pdf):
     # ID determinÃ­stico
     doc_id = build_id_doc(tipo_doc, rut, folio)  # usa rut sin puntos (ya lo hace build_id_doc)
 
-    # Pre-analiza AI fuera de transacciÃ³n para evitar mantener bloqueos prolongados
-    items_ai_pre = []
-    if AI_DETALLE_ENABLED and not _AI_DETALLE_DISABLED_RUNTIME:
-        crop_path_pre = datos_raw.get("__detalle_crop_path__")
-        if crop_path_pre and os.path.exists(crop_path_pre):
-            try:
-                ai_res_pre = analizar_detalle_desde_imagen(crop_path_pre)
-                if ai_res_pre.get("ok"):
-                    items_ai_pre = ai_res_pre.get("items", [])
-                    if len(items_ai_pre) == 0:
-                        src = ai_res_pre.get("source", "openai")
-                        err = ai_res_pre.get("error")
-                        reason = ai_res_pre.get("reason")
-                        keys = ai_res_pre.get("content_keys")
-                        print(f"âš ï¸ AI Detalle (pre) devolviÃ³ 0 Ã­tems (source={src}, error={err}, reason={reason}, keys={keys})")
-                    elif AI_DETALLE_DEBUG:
-                        print(f"ðŸ§ª AI Detalle (pre): {len(items_ai_pre)} Ã­tems detectados")
-                else:
-                    print(f"âš ï¸ AI detalle fallo (pre): {ai_res_pre}")
-            except Exception as e:
-                print(f"âš ï¸ No se pudo analizar Detalle vÃ­a AI (pre): {e}")
-        elif crop_path_pre:
-            print(f"âš ï¸ Recorte de detalle no encontrado en disco: {crop_path_pre}")
-
     with engine.begin() as conn:
         ya_existe = existe_en_bd(conn, tipo_doc, rut, folio)
         if ya_existe:
@@ -703,40 +579,16 @@ def guardar_en_bd(datos_raw, ruta_pdf):
                 print(f"ðŸ“„ LeÃ­do: {doc_id_dup} (ya existÃ­a con detalle, sin subida)")
                 return
             else:
-                # Documento existe pero sin detalle:
-                # 1) si ya vienen items en datos_raw (ej. ai_reader), insertar siempre
-                # 2) si no vienen, intentar usar pre-analisis interno (si IA local habilitada)
+                # Documento existe pero sin detalle: usar items de ai_reader si vienen
                 items_dup = datos_raw.get("__items_detalle__") or []
-                if (not items_dup) and AI_DETALLE_ENABLED and not _AI_DETALLE_DISABLED_RUNTIME:
-                    items_dup = items_ai_pre
-
                 if items_dup:
                     try:
                         _insertar_items_detalle(conn, doc_id_dup, items_dup)
-                        # CategorizaciÃ³n AI si procede
-                        try:
-                            cat_res = categorizar_items_por_ai(items_dup)
-                            if cat_res.get("ok"):
-                                cats = cat_res.get("categorias", [])
-                                for c in cats:
-                                    linea = int(c.get("linea", 0))
-                                    categoria = str(c.get("categoria", "")).strip()
-                                    if linea > 0 and categoria:
-                                        conn.execute(
-                                            detalle.update()
-                                            .where((detalle.c.id_doc == doc_id_dup) & (detalle.c.linea == linea))
-                                            .values(categoria=categoria)
-                                        )
-                        except Exception as e:
-                            print(f"âš ï¸ Error categorizando items por AI: {e}")
-                        print(f"âœ… Subida a BD: {doc_id_dup} (detalle agregado)")
+                        print(f"Subida a BD: {doc_id_dup} (detalle agregado)")
                     except Exception as e:
-                        print(f"âš ï¸ No se pudo insertar detalle AI (duplicado): {e}")
+                        print(f"No se pudo insertar detalle (duplicado): {e}")
                 else:
-                    if AI_DETALLE_ENABLED and not _AI_DETALLE_DISABLED_RUNTIME:
-                        print(f"ðŸ“„ LeÃ­do: {doc_id_dup} (sin detalle AI, sin subida)")
-                    else:
-                        print(f"ðŸ“„ LeÃ­do: {doc_id_dup} (AI desactivada y sin items preleÃ­dos, sin subida)")
+                    print(f"Leido: {doc_id_dup} (sin detalle, sin subida)")
                 return
 
         doc_data = {
@@ -758,32 +610,11 @@ def guardar_en_bd(datos_raw, ruta_pdf):
         }
         try:
             conn.execute(documentos.insert().values(**doc_data))
-            # Inserta Ã­tems de detalle: si ya vienen, Ãºsalos; si no, intenta AI con recorte
-            items_ai = datos_raw.get("__items_detalle__") or []
-            if not items_ai and AI_DETALLE_ENABLED and not _AI_DETALLE_DISABLED_RUNTIME:
-                # usa el pre-resultado si existe para evitar llamada dentro de la transacciÃ³n
-                items_ai = items_ai_pre
-                if AI_DETALLE_DEBUG and items_ai:
-                    print(f"ðŸ§ª AI Detalle (pre-usada): {len(items_ai)} Ã­tems detectados")
-            if items_ai:
-                _insertar_items_detalle(conn, doc_id, items_ai)
-                # CategorizaciÃ³n AI por lÃ­nea y documento
-                try:
-                    cat_res = categorizar_items_por_ai(items_ai)
-                    if cat_res.get("ok"):
-                        cats = cat_res.get("categorias", [])
-                        for c in cats:
-                            linea = int(c.get("linea", 0))
-                            categoria = str(c.get("categoria", "")).strip()
-                            if linea > 0 and categoria:
-                                conn.execute(
-                                    detalle.update()
-                                    .where((detalle.c.id_doc == doc_id) & (detalle.c.linea == linea))
-                                    .values(categoria=categoria)
-                                )
-                except Exception as e:
-                    print(f"âš ï¸ Error categorizando items por AI: {e}")
-            # Intenta vincular referencia si viene en OCR
+            # Inserta items de detalle si vienen desde ai_reader
+            items = datos_raw.get("__items_detalle__") or []
+            if items:
+                _insertar_items_detalle(conn, doc_id, items)
+            # Intenta vincular referencia
             try:
                 ref_text = ""
                 for k, v in datos_raw.items():
@@ -794,50 +625,17 @@ def guardar_en_bd(datos_raw, ruta_pdf):
                 if ref_id:
                     conn.execute(documentos.update().where(documentos.c.id_doc == doc_id).values(referencia=ref_id, DTE_referencia=ref_id))
             except Exception as e:
-                print(f"âš ï¸ No se pudo parsear referencia: {e}")
-            print(f"âœ… Subida a BD: {doc_id}")
+                print(f"No se pudo parsear referencia: {e}")
+            print(f"Subida a BD: {doc_id}")
         except IntegrityError:
             print(f"ðŸ“„ LeÃ­do: {doc_id} (ya existÃ­a, sin subida)")
 
 
 # ============================================================
-# ðŸš€ PIPELINE PRINCIPAL
+# PIPELINE PRINCIPAL
 # ============================================================
 
-def procesar_factura(image_path):
-    results = model.predict(image_path, save=False, verbose=False)
-    datos = {}
-    detalle_crop_path = None
-    base_out = resource_path(str(BASE_DIR / "data/temp_images"))
-    os.makedirs(base_out, exist_ok=True)
-    for r in results:
-        im = cv2.imread(r.path) if cv2 else None
-        if im is None:
-            continue
-        for box, cls in zip(r.boxes.xyxy, r.boxes.cls):
-            nombre = model.names[int(cls)]
-            x1, y1, x2, y2 = map(int, box)
-            m = 10; x1, y1 = max(0, x1 - m), max(0, y1 - m)
-            x2, y2 = min(im.shape[1], x2 + m), min(im.shape[0], y2 + m)
-            crop = im[y1:y2, x1:x2]
-            if crop.size == 0:
-                continue
-            proc = mejorar_imagen(crop)
-            if not reader:
-                continue
-            txt = reader.readtext(proc, detail=0)
-            datos[nombre] = " ".join(txt)
-            if nombre.lower() == "detalle":
-                try:
-                    detalle_crop_path = os.path.join(base_out, f"detalle_crop_{os.path.basename(image_path)}")
-                    if cv2:
-                        cv2.imwrite(detalle_crop_path, crop)
-                    datos["__detalle_crop_path__"] = detalle_crop_path
-                    if AI_DETALLE_DEBUG:
-                        print(f"ðŸ–¼ï¸ Recorte de Detalle guardado: {detalle_crop_path}")
-                except Exception as e:
-                    print(f"âš ï¸ No se pudo guardar recorte Detalle: {e}")
-    return datos
+# (procesar_factura eliminada — lectura via ai_reader.py)
 
 def _insertar_minimo_desde_nombre(ruta_pdf_abs: str, tipo: str, rut: str, folio: str):
     try:
@@ -869,7 +667,6 @@ def _insertar_minimo_desde_nombre(ruta_pdf_abs: str, tipo: str, rut: str, folio:
 
 def procesar_todos_los_pdfs(progress_cb=None):
     existing_ids = get_all_doc_ids(engine)
-    ml_ok = bool(model) and bool(reader) and bool(cv2) and bool(fitz) and bool(Image)
     files = [f for f in os.listdir(RUTA_PDF) if f.lower().endswith(".pdf")]
     to_process = []
     for file in files:
@@ -901,23 +698,11 @@ def procesar_todos_los_pdfs(progress_cb=None):
                 print(f"â­ï¸ Omitido (ya en BD): {doc_id_guess}")
                 continue
         print(f"ðŸ“„ LeÃ­do: {file}")
-        img_path = None
         try:
-            if not ml_ok:
-                if len(parts) >= 3:
-                    _insertar_minimo_desde_nombre(ruta_pdf_abs, tipo_doc_guess, rut_guess, folio_guess)
-                else:
-                    print("âš ï¸ Saltado: no se pudo inferir id desde nombre")
+            if len(parts) >= 3:
+                _insertar_minimo_desde_nombre(ruta_pdf_abs, tipo_doc_guess, rut_guess, folio_guess)
             else:
-                img_path = pdf_a_imagen(ruta_pdf)
-                if not img_path:
-                    if len(parts) >= 3:
-                        _insertar_minimo_desde_nombre(ruta_pdf_abs, tipo_doc_guess, rut_guess, folio_guess)
-                    else:
-                        print("âš ï¸ Saltado: sin imagen y sin inferencia de nombre")
-                else:
-                    datos = procesar_factura(img_path)
-                    guardar_en_bd(datos, ruta_pdf_abs)
+                print("Saltado: no se pudo inferir id desde nombre")
             done += 1
             if progress_cb:
                 try:
@@ -925,22 +710,9 @@ def procesar_todos_los_pdfs(progress_cb=None):
                 except Exception:
                     pass
         except Exception as e:
-            print(f"âŒ Error procesando {file}: {e}")
-        finally:
-            # Limpieza por archivo: imagen temporal
-            try:
-                if img_path and os.path.exists(img_path):
-                    os.remove(img_path)
-                    if AI_DETALLE_DEBUG:
-                        print(f"ðŸ§¹ Imagen temporal eliminada: {img_path}")
-            except Exception as e:
-                print(f"âš ï¸ No se pudo eliminar imagen temporal: {e}")
-    # Fin del proceso
+            print(f"Error procesando {file}: {e}")
 
-    # Limpieza
-    temp_dir = Path(BASE_DIR / "data/temp_images")
-    if temp_dir.exists():
-        shutil.rmtree(temp_dir)
+    # Fin del proceso
 
 if __name__ == "__main__":
     procesar_todos_los_pdfs()
