@@ -1,0 +1,27 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "detalle": "AUDIFONOS BLI",
+      "cantidad": 1.0,
+      "unidad": "CU",
+      "precio_unitario": 16990.0,
+      "monto_item": 16990.0
+    },
+    {
+      "detalle": "ACCESORRIOS B",
+      "cantidad": 1.0,
+      "unidad": "CU",
+      "precio_unitario": 35990.0,
+      "monto_item": 35990.0
+    },
+    {
+      "detalle": "ACCESORIOS CO",
+      "cantidad": 1.0,
+      "unidad": "CU",
+      "precio_unitario": 19990.0,
+      "monto_item": 19990.0
+    }
+  ],
+  "source": "openai"
+}

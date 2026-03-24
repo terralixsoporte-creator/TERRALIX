@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "detalle": "Peajes periodo CN",
+      "cantidad": 1.0,
+      "precio_unitario": 15068.0,
+      "monto_item": 15068.0
+    },
+    {
+      "detalle": "Interes Exento por mora",
+      "cantidad": 1.0,
+      "precio_unitario": 32.0,
+      "monto_item": 32.0
+    }
+  ],
+  "source": "openai"
+}

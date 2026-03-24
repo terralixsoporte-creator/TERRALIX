@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "detalle": "COMISION TARJETA EFECTIVO",
+      "cantidad": 0.0,
+      "precio_unitario": 0.0,
+      "monto_item": 9019.0,
+      "unidad": null,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

@@ -1592,6 +1592,10 @@ def main() -> None:
     add_column_if_missing_sqlite(con, "detalle", "confianza_subcategoria INTEGER")
     add_column_if_missing_sqlite(con, "detalle", "origen_clasificacion TEXT")
     add_column_if_missing_sqlite(con, "detalle", "motivo_clasificacion TEXT")
+    # Columnas desnormalizadas para consulta directa (evita JOIN con documentos)
+    add_column_if_missing_sqlite(con, "detalle", "razon_social TEXT")
+    add_column_if_missing_sqlite(con, "detalle", "giro TEXT")
+    add_column_if_missing_sqlite(con, "detalle", "fecha_emision TEXT")
 
     ensure_mantenedor_categoria_table(con)
     ensure_mantenedor_keyword_table(con)

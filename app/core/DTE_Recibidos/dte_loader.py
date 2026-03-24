@@ -81,10 +81,10 @@ try:
     )
 
 except Exception as e:
-    print(f"âŒ No se pudo inicializar la base de datos en {DB_PATH}: {e}")
+    print(f"No se pudo inicializar la base de datos en {DB_PATH}: {e}")
     # intento de fallback a la ruta por defecto
     DB_PATH = DEFAULT_DB_PATH
-    print(f"âž¡ï¸ Intentando fallback a {DB_PATH}")
+    print(f"Intentando fallback a {DB_PATH}")
     engine = create_engine(
         f"sqlite:///{DB_PATH}",
         echo=False,
@@ -98,7 +98,7 @@ try:
         _conn.exec_driver_sql("PRAGMA journal_mode=WAL;")
         _conn.exec_driver_sql("PRAGMA synchronous=NORMAL;")
 except Exception as e:
-    print(f"âš ï¸ No se pudo establecer WAL/synchronous en SQLite: {e}")
+    print(f"No se pudo establecer WAL/synchronous en SQLite: {e}")
 
 @event.listens_for(Engine, "connect")
 def _set_sqlite_pragma(dbapi_connection, connection_record):
@@ -159,9 +159,9 @@ detalle = Table(
 
 try:
     meta.create_all(engine)
-    print("âœ… Tablas creadas/verificadas: documentos, detalle")
+    print("Tablas creadas/verificadas: documentos, detalle")
 except Exception as e:
-    print(f"âŒ Error creando/verificando tablas: {e}")
+    print(f"Error creando/verificando tablas: {e}")
 
 # ============================================================
 # ðŸ§© FUNCIONES AUXILIARES (OCR + BASE DE DATOS)
@@ -477,7 +477,7 @@ def get_all_doc_ids(engine) -> set:
             result = conn.execute(q).fetchall()
             return {row[0] for row in result}
     except Exception as e:
-        print(f"âš ï¸ No se pudieron obtener los IDs de documentos existentes: {e}")
+        print(f"No se pudieron obtener los IDs de documentos existentes: {e}")
         return set()
 
 def existe_en_bd(conn, tipo_doc, rut_emisor, folio):
@@ -514,7 +514,7 @@ def _insertar_items_detalle(conn, doc_id: str, items: list[dict]):
         try:
             conn.execute(detalle.insert().values(**row))
         except Exception as e:
-            print(f"âš ï¸ No se pudo insertar lÃ­nea {idx} en detalle: {e}")
+            print(f"No se pudo insertar linea {idx} en detalle: {e}")
 
 def _detalles_count(conn, doc_id: str) -> int:
     try:
@@ -551,7 +551,7 @@ def guardar_en_bd(datos_raw, ruta_pdf):
         tipo_fn, rut_fn, folio_fn = inferred
         if (tipo_doc != tipo_fn) or (rut != rut_fn) or (folio != folio_fn):
             print(
-                "âš ï¸ Identidad OCR inconsistente con nombre PDF. "
+                "Identidad OCR inconsistente con nombre PDF. "
                 f"Usando filename -> tipo='{tipo_fn}', rut='{rut_fn}', folio='{folio_fn}' "
                 f"(OCR: tipo='{tipo_doc}', rut='{rut}', folio='{folio}')"
             )
@@ -576,7 +576,7 @@ def guardar_en_bd(datos_raw, ruta_pdf):
             det_count = _detalles_count(conn, doc_id_dup)
             if det_count > 0:
                 # Documento duplicado con detalle existente: sin cambios
-                print(f"ðŸ“„ LeÃ­do: {doc_id_dup} (ya existÃ­a con detalle, sin subida)")
+                print(f"Leido: {doc_id_dup} (ya existia con detalle, sin subida)")
                 return
             else:
                 # Documento existe pero sin detalle: usar items de ai_reader si vienen
@@ -628,7 +628,7 @@ def guardar_en_bd(datos_raw, ruta_pdf):
                 print(f"No se pudo parsear referencia: {e}")
             print(f"Subida a BD: {doc_id}")
         except IntegrityError:
-            print(f"ðŸ“„ LeÃ­do: {doc_id} (ya existÃ­a, sin subida)")
+            print(f"Leido: {doc_id} (ya existi­a, sin subida)")
 
 
 # ============================================================
@@ -661,9 +661,9 @@ def _insertar_minimo_desde_nombre(ruta_pdf_abs: str, tipo: str, rut: str, folio:
                 "detalle_link": "",
             }
             conn.execute(documentos.insert().values(**row))
-            print(f"âœ… Subida mÃ­nima a BD: {doc_id}")
+            print(f"Subida mi­nima a BD: {doc_id}")
     except Exception as e:
-        print(f"âš ï¸ No se pudo insertar registro mÃ­nimo: {e}")
+        print(f"No se pudo insertar registro maximo: {e}")
 
 def procesar_todos_los_pdfs(progress_cb=None):
     existing_ids = get_all_doc_ids(engine)
@@ -695,9 +695,9 @@ def procesar_todos_los_pdfs(progress_cb=None):
             folio_guess = parse_folio(parts[2])
             doc_id_guess = build_id_doc(tipo_doc_guess, rut_guess, folio_guess)
             if doc_id_guess in existing_ids:
-                print(f"â­ï¸ Omitido (ya en BD): {doc_id_guess}")
+                print(f"Omitido (ya en BD): {doc_id_guess}")
                 continue
-        print(f"ðŸ“„ LeÃ­do: {file}")
+        print(f"Lei­do: {file}")
         try:
             if len(parts) >= 3:
                 _insertar_minimo_desde_nombre(ruta_pdf_abs, tipo_doc_guess, rut_guess, folio_guess)

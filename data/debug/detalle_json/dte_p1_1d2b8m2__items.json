@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "detalle": "114019 CUOTA 06",
+      "cantidad": 1.0,
+      "precio_unitario": 30728.0,
+      "monto_item": 30728.0
+    }
+  ],
+  "source": "openai"
+}

@@ -72,12 +72,12 @@ from openai import OpenAI
 def _get_openai_client() -> OpenAI | None:
     key = os.getenv("OPENAI_API_KEY")
     if not key:
-        print("âš ï¸ OPENAI_API_KEY no configurada. Omite anÃ¡lisis de imagen.")
+        print("OPENAI_API_KEY no configurada. Omite anÃ¡lisis de imagen.")
         return None
     try:
         return OpenAI(api_key=key)
     except Exception as e:
-        print(f"âš ï¸ No se pudo inicializar OpenAI: {e}")
+        print(f"No se pudo inicializar OpenAI: {e}")
         return None
 
 def _openai_chat_json_with_retry(
@@ -124,7 +124,7 @@ def _openai_chat_json_with_retry(
             # backoff exponencial + jitter
             sleep_s = min(max_sleep, base_sleep * (2 ** (attempt - 1)))
             sleep_s *= (0.75 + random.random() * 0.5)  # jitter 0.75x-1.25x
-            print(f"â³ rate_limit/transient (intento {attempt}/{max_retries}) â†’ esperando {sleep_s:.1f}s")
+            print(f"rate_limit/transient (intento {attempt}/{max_retries}) â†’ esperando {sleep_s:.1f}s")
             time.sleep(sleep_s)
 
     return {"ok": False, "error": last_err or "unknown_error"}
@@ -196,16 +196,16 @@ def analizar_detalle_desde_imagen(image_path: str) -> Dict[str, Any]:
                     data = json.load(f)
                 if isinstance(data, list):
                     if AI_DETALLE_DEBUG:
-                        print(f"ðŸ§ª Usando JSON debug existente: {debug_json_path} â†’ {len(data)} Ã­tems")
+                        print(f"Usando JSON debug existente: {debug_json_path} â†’ {len(data)} Ã­tems")
                     return {"ok": True, "items": data, "source": "debug_json"}
                 elif isinstance(data, dict) and "items" in data:
                     if AI_DETALLE_DEBUG:
-                        print(f"ðŸ§ª Usando JSON debug existente: {debug_json_path} â†’ {len(data.get('items', []))} Ã­tems")
+                        print(f"Usando JSON debug existente: {debug_json_path} â†’ {len(data.get('items', []))} Ã­tems")
                     return {"ok": True, **data, "source": "debug_json"}
         except Exception as e:
             # No bloquear por errores de lectura de debug; continuar con OpenAI
             if AI_DETALLE_DEBUG:
-                print(f"âš ï¸ No se pudo leer JSON debug: {e}")
+                print(f"No se pudo leer JSON debug: {e}")
 
     client = _get_openai_client()
     if client is None:
@@ -305,9 +305,9 @@ def analizar_detalle_desde_imagen(image_path: str) -> Dict[str, Any]:
                 with open(debug_json_path, "w", encoding="utf-8") as f:
                     # Guardar la respuesta completa para mejor trazabilidad durante debug
                     json.dump(result, f, ensure_ascii=False, indent=2)
-                print(f"ðŸ§ª Guardado JSON debug: {debug_json_path}")
+                print(f"Guardado JSON debug: {debug_json_path}")
             except Exception as e:
-                print(f"âš ï¸ No se pudo guardar JSON debug: {e}")
+                print(f"No se pudo guardar JSON debug: {e}")
 
         return result
     except Exception:
@@ -575,13 +575,13 @@ def _print_debug_insert_preview(pdf_path: str, datos_raw: Dict[str, Any]) -> Non
     detalle = datos_raw.get("__items_detalle__", [])
 
     print("\n" + "=" * 110)
-    print(f"ðŸ“„ DEBUG INSERT PREVIEW - {os.path.basename(pdf_path)}")
+    print(f"DEBUG INSERT PREVIEW - {os.path.basename(pdf_path)}")
     print("=" * 110)
 
-    print("\nðŸ§¾ [DOCUMENTO] (lo que deberÃ­a insertarse en tabla documento)")
+    print("\n[DOCUMENTO] (lo que deberÃ­a insertarse en tabla documento)")
     print(json.dumps(doc_row, ensure_ascii=False, indent=2))
 
-    print("\nðŸ“¦ [DETALLE] (lo que deberÃ­a insertarse en tabla detalle)")
+    print("\n[DETALLE] (lo que deberÃ­a insertarse en tabla detalle)")
     if isinstance(detalle, list):
         print(f"Items: {len(detalle)}")
         print(json.dumps(detalle, ensure_ascii=False, indent=2))
@@ -666,7 +666,7 @@ def read_one_pdf_with_ai(pdf_path: str, debug: bool = False) -> Dict[str, Any]:
             if img_path and os.path.exists(img_path):
                 os.remove(img_path)
         except Exception as e:
-            print(f"âš ï¸ No se pudo borrar temp image: {img_path} ({e})")
+            print(f"No se pudo borrar temp image: {img_path} ({e})")
     
 def _collect_target_files(file_arg: Optional[str], dir_arg: Optional[str]) -> List[str]:
     out: List[str] = []
@@ -714,7 +714,7 @@ def _doc_exists_in_db(id_doc: str, db_path: str) -> bool:
         cur.execute("SELECT 1 FROM documentos WHERE id_doc = ? LIMIT 1;", (id_doc,))
         return cur.fetchone() is not None
     except Exception as e:
-        print(f"âš ï¸ Error consultando DB ({db_path}): {e}")
+        print(f"Error consultando DB ({db_path}): {e}")
         # Si falla la consulta, NO saltar: mejor procesar para no perder docs
         return False
     finally:
@@ -740,8 +740,8 @@ if __name__ == "__main__":
 
     db_path = _get_db_path()
     if not os.path.isfile(db_path):
-        print(f"âŒ DB no encontrada en: {db_path}")
-        print("ðŸ‘‰ Revisa RUTA_DB_DTE_RECIBIDOS en config.env o que el archivo exista.")
+        print(f"DB no encontrada en: {db_path}")
+        print("Revisa RUTA_DB_DTE_RECIBIDOS en config.env o que el archivo exista.")
         sys.exit(1)
 
     for i, pdf in enumerate(targets):
@@ -751,11 +751,11 @@ if __name__ == "__main__":
 
         # âœ… 1) Si ya existe en DB â†’ saltar
         if _doc_exists_in_db(id_doc, db_path):
-            print(f"\nâ­ï¸ Ya existe en DB â†’ {id_doc} (skip) [{i+1}/{len(targets)}]")
+            print(f"\nYa existe en DB â†’ {id_doc} (skip) [{i+1}/{len(targets)}]")
             continue
 
-        print(f"\nðŸ§  IA leyendo ({i+1}/{len(targets)}): {pdf}")
-        print(f"ðŸ†” id_doc: {id_doc}")
+        print(f"\nIA leyendo ({i+1}/{len(targets)}): {pdf}")
+        print(f"id_doc: {id_doc}")
 
         max_retries = 4
         attempt = 0
@@ -764,22 +764,22 @@ if __name__ == "__main__":
         while attempt < max_retries and not success:
             attempt += 1
             if attempt > 1:
-                print(f"ðŸ” Reintentando ({attempt}/{max_retries})...")
+                print(f"Reintentando ({attempt}/{max_retries})...")
 
             res = read_one_pdf_with_ai(pdf, debug=args.debug)
 
             if res.get("ok"):
-                print(f"âœ… Guardado en BD: {res.get('doc_id')} - Ã­tems: {len(res.get('items', []))}")
+                print(f"Guardado en BD: {res.get('doc_id')} - Ã­tems: {len(res.get('items', []))}")
                 success = True
             else:
-                print(f"âŒ Error: {res.get('error')}")
+                print(f"Error: {res.get('error')}")
                 if attempt < max_retries:
                     wait = 3 * attempt
-                    print(f"â³ Esperando {wait}s antes de reintentar...")
+                    print(f"Esperando {wait}s antes de reintentar...")
                     time.sleep(wait)
 
         if not success:
-            print(f"âš ï¸ No se pudo procesar despuÃ©s de {max_retries} intentos â†’ {pdf}")
+            print(f"No se pudo procesar despuÃ©s de {max_retries} intentos â†’ {pdf}")
 
         # throttle para evitar rate limits
         time.sleep(1.2)

@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "detalle": "NOTEBOOK 83K1",
+      "cantidad": 1.0,
+      "precio_unitario": 799990.0,
+      "monto_item": 799990.0,
+      "unidad": "CU",
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}
