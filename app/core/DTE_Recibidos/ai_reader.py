@@ -20,27 +20,18 @@ import tempfile
 import atexit
 
 # =========================
-# BASE PATH (raÃ­z TERRALIX)
+# BASE PATH (raiz TERRALIX)
 # =========================
-BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent  # ajusta si lo dejas en otra carpeta
-if str(BASE_DIR) not in sys.path:
-    sys.path.append(str(BASE_DIR))
+_ROOT = Path(__file__).resolve().parents[3]
+if str(_ROOT) not in sys.path:
+    sys.path.append(str(_ROOT))
 
-# =========================
-# PyInstaller resource_path
-# =========================
-def resource_path(relative_path: str) -> str:
-    try:
-        base_path = sys._MEIPASS  # type: ignore
-    except Exception:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+from app.core.paths import get_env_path
 
 # =========================
 # ENV
 # =========================
-ENV_PATH = resource_path(str(BASE_DIR / "data/config.env"))
-load_dotenv(ENV_PATH)
+load_dotenv(str(get_env_path()), override=False)
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")

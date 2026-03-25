@@ -9,6 +9,7 @@ import sys
 import os
 
 from app.core.DTE_Recibidos.weekly_background_checker import start_weekly_checker
+from app.core.paths import get_logs_dir
 
 # === BASE PATH (raiz del proyecto TERRALIX) ===
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -33,7 +34,15 @@ def relative_to_assets(path: str) -> Path:
     return resource_path(ASSETS_PATH / Path(path))
 
 
-from app.gui.actualizar_base_de_datos import create_update_tab
+def _log_main(message: str) -> None:
+    """Registra eventos de la ventana principal sin usar consola."""
+    try:
+        log_path = get_logs_dir() / "main_app.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(message + "\n")
+    except Exception:
+        pass
 
 
 def _open_manual():
@@ -51,6 +60,8 @@ def _open_manual():
 
 def open_main_app(login_window: Tk | None):
     """Convierte la ventana de login en la ventana principal con solo la pestaña de actualizacion."""
+    from app.gui.actualizar_base_de_datos import create_update_tab
+
     root = login_window if login_window is not None else Tk()
 
     for child in root.winfo_children():
@@ -67,7 +78,7 @@ def open_main_app(login_window: Tk | None):
     try:
         root.iconbitmap(relative_to_assets("Terralix_Logo.ico"))
     except Exception as e:
-        print(f"[WARN] No se encontro el icono .ico: {e}")
+        _log_main(f"[WARN] No se encontro el icono .ico: {e}")
 
     header_bg = "#0F6645"
     app_bg = "#FFFEFF"
@@ -124,10 +135,9 @@ def open_main_app(login_window: Tk | None):
     try:
         started = start_weekly_checker()
         if started:
-            print("[INFO] Chequeo semanal de DTE en segundo plano habilitado.")
+            _log_main("[INFO] Chequeo semanal de DTE en segundo plano habilitado.")
     except Exception as e:
-        print(f"[WARN] No se pudo iniciar el chequeo semanal en segundo plano: {e}")
+        _log_main(f"[WARN] No se pudo iniciar el chequeo semanal en segundo plano: {e}")
 
     if login_window is None:
         root.mainloop()
-

@@ -19,38 +19,35 @@ from sqlalchemy import (
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 
-# === BASE PATH (raÃ­z del proyecto TERRALIX) ===
-BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent # Read_Load_PDF â†’ Modulo â†’ core â†’ app â†’ TERRALIX
-if str(BASE_DIR) not in sys.path:
-    sys.path.append(str(BASE_DIR))
+# === BASE PATH (raiz del proyecto TERRALIX) ===
+_ROOT = Path(__file__).resolve().parents[3]
+if str(_ROOT) not in sys.path:
+    sys.path.append(str(_ROOT))
 
-# === FUNCIONES DE RUTA COMPATIBLES CON PyInstaller ===
-def resource_path(relative_path: str) -> str:
-    """Obtiene ruta absoluta compatible con entorno dev y PyInstaller."""
-    try:
-        base_path = sys._MEIPASS  # tipo: ignore
-    except Exception:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+from app.core.paths import get_env_path, get_user_data_dir
 
 # === RUTAS CLAVE ===
-ENV_PATH = resource_path(str(BASE_DIR / "data/config.env"))
-load_dotenv(ENV_PATH)
+load_dotenv(str(get_env_path()), override=False)
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
-DEFAULT_DB_PATH = resource_path(str(BASE_DIR / "data/dte_recibidos.db"))
-DEFAULT_PDF_DIR = resource_path(str(BASE_DIR / "data/pdfs"))
+# Fallbacks escribibles en AppData (nunca en _internal/)
+_user_data = get_user_data_dir()
+DEFAULT_DB_PATH = str(_user_data / "DteRecibidos_db.db")
+DEFAULT_PDF_DIR = str(_user_data / "pdfs")
 
-DB_PATH = os.getenv("DB_PATH_DTE_RECIBIDOS") or DEFAULT_DB_PATH
-RUTA_PDF = os.getenv("RUTA_PDF_DTE_RECIBIDOS") or DEFAULT_PDF_DIR
+DB_PATH  = (os.getenv("DB_PATH_DTE_RECIBIDOS") or "").strip().strip("").strip("’") or DEFAULT_DB_PATH
+RUTA_PDF = (os.getenv("RUTA_PDF_DTE_RECIBIDOS") or "").strip().strip("").strip("’") or DEFAULT_PDF_DIR
 
 # Asegura directorios para DB y PDF
 try:
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 except Exception:
     pass
-os.makedirs(RUTA_PDF, exist_ok=True)
+try:
+    os.makedirs(RUTA_PDF, exist_ok=True)
+except Exception:
+    pass
 
 # === MODELOS ===
 # (YOLO y EasyOCR eliminados — la lectura de PDFs se hace via ai_reader.py)

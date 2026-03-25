@@ -38,9 +38,14 @@ from sklearn.svm import LinearSVC
 # =============================================================================
 # RUTAS
 # =============================================================================
-_THIS_DIR = Path(__file__).resolve().parent
-BASE_DIR = _THIS_DIR.parents[2]
-MODEL_PATH_DEFAULT = BASE_DIR / "data" / "classifier_dte.pkl"
+_ROOT = Path(__file__).resolve().parents[3]
+if str(_ROOT) not in sys.path:
+    sys.path.append(str(_ROOT))
+
+from app.core.paths import get_model_path as _get_model_path
+
+# MODEL_PATH_DEFAULT apunta siempre a una ubicacion escribible (AppData o data/)
+MODEL_PATH_DEFAULT = _get_model_path()
 
 # =============================================================================
 # CONSTANTES TEMPORALES (agricultura chilena – cítricos)

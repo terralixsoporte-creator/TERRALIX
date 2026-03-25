@@ -1,4 +1,4 @@
-﻿# Script Control:
+# Script Control:
 # - Role: SII scraping and PDF download stage.
 # - Track file: docs/SCRIPT_CONTROL.md
 import os
@@ -47,32 +47,28 @@ def _set_playwright_browsers_path():
 
 
 _set_playwright_browsers_path()
-BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent 
-if str(BASE_DIR) not in sys.path:
-    sys.path.append(str(BASE_DIR))
-    
-def resource_path(relative_path: str) -> str:
-    """ Get absolute path to resource, works for dev and for PyInstaller """
-    try:
-        base_path = sys._MEIPASS  
-    except Exception:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
 
-ENV_PATH = resource_path(BASE_DIR / "data/config.env")
+# Asegurar que la raiz del proyecto este en sys.path
+_ROOT = Path(__file__).resolve().parents[3]
+if str(_ROOT) not in sys.path:
+    sys.path.append(str(_ROOT))
 
-load_dotenv(resource_path(str(ENV_PATH)))
+from app.core.paths import get_env_path, get_storage_state_path
+
+ENV_PATH     = str(get_env_path())
+STORAGE_PATH = str(get_storage_state_path())
+
+load_dotenv(ENV_PATH, override=False)
 
 # --- CREDENCIALES ---
-RUT = os.getenv("RUT")
-CLAVE = os.getenv("CLAVE")
-RUT2 = os.getenv("RUT2")
-CLAVE2 = os.getenv("CLAVE2")
-RUTA_PDF= os.getenv("RUTA_PDF_DTE_RECIBIDOS")
+RUT      = os.getenv("RUT")
+CLAVE    = os.getenv("CLAVE")
+RUT2     = os.getenv("RUT2")
+CLAVE2   = os.getenv("CLAVE2")
+RUTA_PDF = os.getenv("RUTA_PDF_DTE_RECIBIDOS")
 
-# --- CONFIGURACIÃ“N ---
+# --- CONFIGURACION ---
 PROXY = os.getenv("PROXY", "")
-STORAGE_PATH = resource_path(BASE_DIR / "data/storage_state.json")
 SLOW_MO = 0
 HEADLESS = True
 USER_AGENTS = [
@@ -87,7 +83,7 @@ def random_sleep(base=1.0, var=1.5):
     time.sleep(base + random.random() * var)
 
 def login_generico(page, rut, clave, descripcion=""):
-    """Completa el formulario de login genÃ©rico del SII"""
+    """Completa el formulario de login generico del SII"""
     try:
         page.wait_for_selector("input#rutcntr", timeout=8000)
         print(f"Iniciando sesion {descripcion}...")
@@ -97,7 +93,7 @@ def login_generico(page, rut, clave, descripcion=""):
         random_sleep(0.5, 1.0)
         page.press("input#clave", "Enter")
         page.wait_for_load_state("networkidle")
-        print("âœ… Login exitoso")
+        print("Login exitoso")
         random_sleep(1.0, 2.0)
     except Exception as e:
         print("No se encuentra el formulario de login:", e)
@@ -113,7 +109,6 @@ def existe_factura(rut_emisor, folio, carpeta=None):
     """Verifica si un PDF ya fue descargado, buscando coincidencias exactas o parciales"""
     if carpeta is None:
         carpeta = RUTA_PDF
-    # Evita fallos si la carpeta no estÃ¡ configurada o no existe
     if not carpeta or not os.path.isdir(carpeta):
         return False
     for f in os.listdir(carpeta):
@@ -130,11 +125,10 @@ def procesar_tabla(dte_page, context, ruta, progress_cb=None):
     pagina = 1
 
     while True:
-        print(f"\Procesando pagina {pagina}...")
+        print(f"Procesando pagina {pagina}...")
         dte_page.wait_for_selector("table", timeout=15000)
         rows = dte_page.query_selector_all("table tr")[1:]  # omitir encabezado
         print(f"Filas detectadas en esta pagina: {len(rows)}")
-        # Progreso por pÃ¡gina (total conocido por pÃ¡gina)
         total_en_pagina = len(rows)
         descargados_en_pagina = 0
 
@@ -144,20 +138,19 @@ def procesar_tabla(dte_page, context, ruta, progress_cb=None):
                 if len(cells) < 5:
                     continue
 
-                tipo_doc = obtener_texto_seguro(cells[3])
+                tipo_doc   = obtener_texto_seguro(cells[3])
                 rut_emisor = obtener_texto_seguro(cells[1])
-                folio = obtener_texto_seguro(cells[4])
+                folio      = obtener_texto_seguro(cells[4])
 
                 nombre_pdf = f"{tipo_doc}_{rut_emisor}_{folio}.pdf".replace("/", "_").replace(" ", "_")
-                ruta_pdf = os.path.join(ruta, nombre_pdf)
+                ruta_pdf   = os.path.join(ruta, nombre_pdf)
 
-                # âœ… VerificaciÃ³n de duplicados restaurada (exacta + parcial)
                 if os.path.exists(ruta_pdf) or existe_factura(rut_emisor, folio, ruta):
                     print(f"({i}) Ya existe: {nombre_pdf}, saltando.")
                     descargados_en_pagina += 1
                     if progress_cb:
                         try:
-                            progress_cb(descargados_en_pagina, total_en_pagina, f"(pÃ¡g. {pagina})")
+                            progress_cb(descargados_en_pagina, total_en_pagina, f"(pag. {pagina})")
                         except Exception:
                             pass
                     continue
@@ -172,14 +165,12 @@ def procesar_tabla(dte_page, context, ruta, progress_cb=None):
 
                 print(f"({i}) Abriendo detalle: {tipo_doc} | {rut_emisor} | Folio {folio}")
 
-                # Abrir detalle en nueva pestaÃ±a
                 with context.expect_page() as nueva_pagina_info:
                     dte_page.evaluate(f"window.open('{href_detalle}', '_blank');")
                 detalle_page = nueva_pagina_info.value
                 detalle_page.wait_for_load_state("networkidle", timeout=15000)
                 random_sleep(1.0, 2.0)
 
-                # Expandir secciÃ³n â€œOtros detalles documentoâ€
                 print("Expandiendo 'Otros detalles documento'...")
                 try:
                     boton_otro = detalle_page.query_selector("a[href='#collapseOtros']")
@@ -190,11 +181,10 @@ def procesar_tabla(dte_page, context, ruta, progress_cb=None):
                         )
                         print("Seccion desplegada.")
                     else:
-                        print("No se encontrdo boton de detalles.")
+                        print("No se encontro boton de detalles.")
                 except Exception as e:
                     print(f"No se pudo expandir la seccion: {e}")
 
-                # Buscar enlace PDF
                 pdf_link = detalle_page.query_selector("#collapseOtros a[href*='mipeShowPdf.cgi']")
                 if not pdf_link:
                     pdf_link = detalle_page.query_selector("a[href*='mipeShowPdf.cgi']")
@@ -210,9 +200,8 @@ def procesar_tabla(dte_page, context, ruta, progress_cb=None):
                     pdf_href = "https://www1.sii.cl" + pdf_href
                 print(f"Enlace PDF detectado: {pdf_href}")
 
-                # Descargar PDF en carpeta local
                 try:
-                    response = detalle_page.request.get(pdf_href)
+                    response  = detalle_page.request.get(pdf_href)
                     pdf_bytes = response.body()
                     with open(ruta_pdf, "wb") as f:
                         f.write(pdf_bytes)
@@ -235,7 +224,6 @@ def procesar_tabla(dte_page, context, ruta, progress_cb=None):
                 errores_descarga.append(("Desconocido", "Desconocido", "Desconocido", str(e)))
                 continue
 
-        # ðŸ” Pasar a la siguiente pÃ¡gina (flecha)
         next_btn = dte_page.query_selector("a#pagina_siguiente.paginate_button")
 
         if next_btn:
@@ -243,7 +231,7 @@ def procesar_tabla(dte_page, context, ruta, progress_cb=None):
             if href_next and not href_next.strip().endswith("="):
                 if href_next.startswith("/"):
                     href_next = "https://www1.sii.cl" + href_next
-                print(f"Pasando a la siguiente pagina.....")
+                print("Pasando a la siguiente pagina.....")
                 dte_page.goto(href_next)
                 dte_page.wait_for_load_state("networkidle", timeout=15000)
                 random_sleep(2.0, 3.0)
@@ -253,11 +241,10 @@ def procesar_tabla(dte_page, context, ruta, progress_cb=None):
         print("No hay mas paginas disponibles. Scraping finalizado.")
         break
 
-    # --- Resumen de errores ---
     if errores_descarga:
         print("\nDescargas incompletas detectadas:")
         for err in errores_descarga:
-            print(f"  - {err[0]} | {err[1]} | Folio {err[2]} â†’ {err[3]}")
+            print(f"  - {err[0]} | {err[1]} | Folio {err[2]} -> {err[3]}")
         print(f"\nTotal de documentos no descargados: {len(errores_descarga)}")
         print("Ejecuta nuevamente el script para reintentar los faltantes.")
         return True
@@ -267,16 +254,16 @@ def procesar_tabla(dte_page, context, ruta, progress_cb=None):
 
 def scrapear(ruta_pdf, progress_cb=None):
     with sync_playwright() as p:
-        proxy_conf = {"server": PROXY} if PROXY else None
+        proxy_conf  = {"server": PROXY} if PROXY else None
         launch_args = {"headless": HEADLESS, "slow_mo": SLOW_MO}
         if proxy_conf:
             launch_args["proxy"] = proxy_conf
 
-        browser = p.chromium.launch(**launch_args)
+        browser      = p.chromium.launch(**launch_args)
         context_args = {
-            "user_agent": random.choice(USER_AGENTS),
+            "user_agent":  random.choice(USER_AGENTS),
             "timezone_id": "America/Santiago",
-            "locale": "es-CL",
+            "locale":      "es-CL",
         }
 
         if os.path.exists(STORAGE_PATH):
@@ -284,31 +271,28 @@ def scrapear(ruta_pdf, progress_cb=None):
             context_args["storage_state"] = STORAGE_PATH
 
         context = browser.new_context(**context_args)
-        page = context.new_page()
+        page    = context.new_page()
 
-        # 1ï¸âƒ£ Login inicial
         if not os.path.exists(STORAGE_PATH):
             print("Paso 1: Login inicial en Mi SII")
             page.goto(
-                "https://zeusr.sii.cl/AUT2000/InicioAutenticacion/IngresoRutClave.html?https://misiir.sii.cl/cgi_misii/siihome.cgi"
+                "https://zeusr.sii.cl/AUT2000/InicioAutenticacion/IngresoRutClave.html"
+                "?https://misiir.sii.cl/cgi_misii/siihome.cgi"
             )
             login_generico(page, RUT, CLAVE, "en Mi SII")
             context.storage_state(path=STORAGE_PATH)
-            print("ðŸ’¾ SesiÃ³n guardada para futuros accesos")
+            print("Sesion guardada para futuros accesos")
 
-        # 2ï¸âƒ£ Ir a Servicios Online - DTE
         print("Paso 2: Ir a Servicios Online - DTE")
         page.goto("https://www.sii.cl/servicios_online/1039-1183.html")
         page.wait_for_load_state("networkidle")
         random_sleep(1.5, 2.5)
 
-        # 3ï¸âƒ£ Expandir menÃº â€œHistorial de DTEâ€
         try:
             page.locator("a[href='#collapseTwo']").click(force=True)
         except:
             pass
 
-        # 4ï¸âƒ£ Buscar enlace al portal DTE
         link = page.query_selector("a[href*='mipeLaunchPage.cgi?OPCION=1']")
         href = (
             link.get_attribute("href")
@@ -316,21 +300,18 @@ def scrapear(ruta_pdf, progress_cb=None):
             else "https://www1.sii.cl/cgi-bin/Portal001/mipeLaunchPage.cgi?OPCION=1&TIPO=4"
         )
 
-        # 5ï¸âƒ£ Ir al portal
         page.goto(href)
         page.wait_for_load_state("networkidle")
         random_sleep(2, 3)
 
-        # 6ï¸âƒ£ Segundo login
         login_generico(page, RUT2, CLAVE2, "en Portal DTE")
 
-        # 7ï¸âƒ£ Ingresar al historial
         panel = page.locator("a[href='#collapseAdm']")
         if panel.count() > 0:
             panel.first.click(force=True)
         random_sleep(1.5)
 
-        links = page.query_selector_all("a[href*='mipeLaunchPage.cgi']")
+        links      = page.query_selector_all("a[href*='mipeLaunchPage.cgi']")
         href_final = None
         for l in links:
             text_temp = (l.inner_text() or "").strip().lower()
@@ -353,13 +334,9 @@ def scrapear(ruta_pdf, progress_cb=None):
             print("Algunas descargas fallaron. Reejecuta el script.")
             return True
         else:
-            print("Todo descargado con Ã©xito.")
+            print("Todo descargado con exito.")
 
         browser.close()
 
 if __name__ == "__main__":
     scrapear(RUTA_PDF)
-
-
-
-

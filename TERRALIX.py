@@ -21,11 +21,11 @@ if getattr(sys, "frozen", False):
             os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(p)
             break
 
-
 BASE_DIR = Path(__file__).resolve().parent
 
 
 def resource_path(relative_path: str) -> str:
+    """Ruta a recursos de solo lectura empaquetados por PyInstaller."""
     try:
         base_path = sys._MEIPASS  # type: ignore[attr-defined]
     except Exception:
@@ -33,22 +33,23 @@ def resource_path(relative_path: str) -> str:
     return os.path.join(base_path, relative_path)
 
 
-DATA_PATH = BASE_DIR / "data"
-ENV_PATH = DATA_PATH / "config.env"
-DATA_PATH.mkdir(parents=True, exist_ok=True)
-ENV_PATH.touch(exist_ok=True)
-load_dotenv(resource_path(str(ENV_PATH)))
+from app.core.paths import get_env_path, get_user_data_dir
 
+DATA_PATH = get_user_data_dir()
+ENV_PATH  = get_env_path()   # copia el config bundled si es primer arranque
+
+# Exportar para que submódulos que no usen paths.py también lo encuentren
+os.environ["ENV_PATH"] = str(ENV_PATH)
+
+load_dotenv(str(ENV_PATH))
 
 try:
     from app.assets.update.__version__ import __version__ as APP_VERSION
 except Exception:
     APP_VERSION = "0.0.0"
 
-
 def _clean_env_path(value: str) -> str:
     return (value or "").strip().strip('"').strip("'")
-
 
 def _ensure_first_run_paths() -> bool:
     """

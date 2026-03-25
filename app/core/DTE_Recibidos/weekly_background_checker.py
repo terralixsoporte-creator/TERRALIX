@@ -15,11 +15,16 @@ from dotenv import load_dotenv
 
 from app.core.DTE_Recibidos.pipeline_guard import acquire_pipeline_lock, release_pipeline_lock
 
-BASE_DIR = Path(__file__).resolve().parents[3]
-DATA_DIR = BASE_DIR / "data"
-ENV_PATH = DATA_DIR / "config.env"
-STATE_PATH = DATA_DIR / "auto_weekly_dte_check_state.json"
-LOG_PATH = DATA_DIR / "logs" / "auto_weekly_dte_check.log"
+_ROOT = Path(__file__).resolve().parents[3]
+import sys as _sys
+if str(_ROOT) not in _sys.path:
+    _sys.path.append(str(_ROOT))
+
+from app.core.paths import get_env_path, get_state_path, get_logs_dir
+
+ENV_PATH   = get_env_path()
+STATE_PATH = get_state_path()
+LOG_PATH   = get_logs_dir() / "auto_weekly_dte_check.log"
 
 _STARTED = False
 _START_LOCK = threading.Lock()

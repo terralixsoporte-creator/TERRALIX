@@ -10,33 +10,30 @@ import sys
 import threading
 
 # === BASE PATH (raiz del proyecto TERRALIX) ===
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-if str(BASE_DIR) not in sys.path:
-    sys.path.append(str(BASE_DIR))
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.append(str(_ROOT))
+
+from app.core.paths import get_env_path
 
 
 # === FUNCIONES DE RUTAS ===
-def resource_path(relative_path: str) -> str:
+def resource_path(relative_path) -> str:
     """Obtiene ruta absoluta compatible con PyInstaller y entorno de desarrollo."""
     try:
         base_path = sys._MEIPASS
     except Exception:
         base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+    return os.path.join(base_path, str(relative_path))
 
 
-def relative_to_assets(path: str) -> Path:
-    """Devuelve la ruta completa de un recurso dentro de /assets."""
-    return resource_path(ASSETS_PATH / Path(path))
+def relative_to_assets(path: str) -> str:
+    """Devuelve la ruta completa de un recurso de imagen empaquetado."""
+    return resource_path(os.path.join("app", "assets", "imgs", path))
 
 
-# === CONFIGURACION DE RUTAS CLAVE ===
-DATA_PATH = BASE_DIR / "data"
-ENV_PATH = DATA_PATH / "config.env"
-ASSETS_PATH = BASE_DIR / "app/assets/imgs"
-
-# === CARGAR VARIABLES DE ENTORNO ===
-load_dotenv(resource_path(str(ENV_PATH)))
+# === CARGAR VARIABLES DE ENTORNO (siempre desde AppData o data/) ===
+load_dotenv(str(get_env_path()), override=False)
 
 
 def open_login(parent_window=None):
@@ -139,6 +136,7 @@ def open_login(parent_window=None):
     def continuar():
         email = entry_email.get().strip()
         password = entry_pass.get().strip()
+        remember_credentials = bool(var_remember.get())
 
         if not email:
             _set_status("Ingresa tu email.")
@@ -149,36 +147,61 @@ def open_login(parent_window=None):
             entry_pass.focus_set()
             return
 
-        _set_status("Conectando...", color="#666666")
         _set_buttons_state("disabled")
+        _set_status("Conectando...", color="#666666")
+
+        def _persist_credentials():
+            try:
+                if remember_credentials:
+                    from app.core.auth import save_credentials
+                    save_credentials(email, password)
+                else:
+                    from app.core.auth import clear_credentials
+                    clear_credentials()
+            except Exception:
+                pass
 
         def _do_login():
             from app.core.auth import sign_in
+            open_main_app_fn = None
 
-            result = sign_in(email, password)
+            try:
+                result = sign_in(email, password)
+            except Exception as e:
+                result = {"ok": False, "error": f"Error inesperado: {e}"}
+
+            if result.get("ok"):
+                try:
+                    from app.gui.main_app import open_main_app as _open_main_app
+                    # Precarga modulo pesado fuera del hilo de UI para evitar "pegues" al transicionar.
+                    from app.gui.actualizar_base_de_datos import create_update_tab as _unused_create_update_tab
+                    open_main_app_fn = _open_main_app
+                except Exception as e:
+                    result = {"ok": False, "error": f"No se pudo abrir la app principal: {e}"}
 
             def _handle_result():
-                if result["ok"]:
-                    _set_status("")
-                    # Guardar o limpiar credenciales segun checkbox
+                if result.get("ok"):
+                    _set_status("Iniciando aplicacion...", color="#666666")
                     try:
-                        if var_remember.get():
-                            from app.core.auth import save_credentials
-                            save_credentials(email, password)
+                        if open_main_app_fn is not None:
+                            open_main_app_fn(window)
                         else:
-                            from app.core.auth import clear_credentials
-                            clear_credentials()
-                    except Exception:
-                        pass
-                    from app.gui.main_app import open_main_app
-                    open_main_app(window)
+                            from app.gui.main_app import open_main_app
+                            open_main_app(window)
+                        threading.Thread(target=_persist_credentials, daemon=True).start()
+                    except Exception as e:
+                        _set_status(f"No se pudo abrir la app principal: {e}")
+                        _set_buttons_state("normal")
                 else:
-                    _set_status(result["error"])
+                    _set_status(result.get("error", "No se pudo iniciar sesion."))
                     _set_buttons_state("normal")
                     entry_pass.delete(0, "end")
                     entry_pass.focus_set()
 
-            window.after(0, _handle_result)
+            try:
+                window.after(0, _handle_result)
+            except Exception:
+                pass
 
         threading.Thread(target=_do_login, daemon=True).start()
 
@@ -306,7 +329,7 @@ def open_login(parent_window=None):
 
     # --- LINK OLVIDE CONTRASENA (centrado) ---
     lbl_forgot = Label(
-        window, text="Olvidaste tu contrasena?", bg=BG, fg="#1565C0",
+        window, text="¿Olvidaste tu contrasena?", bg=BG, fg="#1565C0",
         font=FONT_LINK, cursor="hand2",
     )
     lbl_forgot.place(x=459.0, y=370.0, width=402.0)

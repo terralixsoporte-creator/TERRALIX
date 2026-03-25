@@ -21,17 +21,7 @@ if str(BASE_DIR) not in sys.path:
 
 # === MODULOS CREADOS ===
 from app.gui.utils import confirmar_salida  # ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ruta absoluta correcta
-from app.core.DTE_Recibidos import ai_reader as AIR
-from app.core.DTE_Recibidos import categorizer as CAT
-from app.core.DTE_Recibidos.pipeline_guard import (
-    acquire_pipeline_lock,
-    release_pipeline_lock,
-)
-from app.core.DTE_Recibidos.excel_sync import (
-    export_to_excel,
-    sync_and_retrain,
-    backfill_denormalized_columns,
-)
+# Importaciones pesadas de pipeline se hacen en demanda para no bloquear login.
 
 # === FUNCIONES DE RUTAS ===
 def resource_path(relative_path: str) -> str:
@@ -334,6 +324,8 @@ No cierres esta ventana hasta que termine.
             frame.after(0, _update)
 
         def run_ai_reader_batch(ruta_pdf: str, db_path: str):
+            from app.core.DTE_Recibidos import ai_reader as AIR
+
             print("\n[2/3] Iniciando lectura IA de PDFs...\n")
             targets = AIR._collect_target_files(file_arg=None, dir_arg=ruta_pdf)
             if not targets:
@@ -420,6 +412,8 @@ No cierres esta ventana hasta que termine.
             print("\n[OK] Lectura IA finalizada.\n")
 
         def run_categorizer_batch():
+            from app.core.DTE_Recibidos import categorizer as CAT
+
             gui_batch_sleep = max(0.0, _env_float("GUI_REVIEW_BATCH_SLEEP", 0.05))
             CAT.BATCH_SLEEP = gui_batch_sleep
             print(f"\n[3/3] Iniciando categorizacion contable (batch_sleep={gui_batch_sleep:.2f}s)...\n")
@@ -432,6 +426,11 @@ No cierres esta ventana hasta que termine.
             print("\n[OK] Categorizacion finalizada.\n")
 
         def ejecutar_pipeline(ruta_pdf: str, db_path: str):
+            from app.core.DTE_Recibidos.pipeline_guard import (
+                acquire_pipeline_lock,
+                release_pipeline_lock,
+            )
+
             lock_acquired = False
             try:
                 lock_acquired = acquire_pipeline_lock(blocking=False)
@@ -526,6 +525,11 @@ No cierres esta ventana hasta que termine.
         excel_path = os.path.join(excel_dir, "DteRecibidos_revision.xlsx")
 
         def _do_export():
+            from app.core.DTE_Recibidos.excel_sync import (
+                export_to_excel,
+                backfill_denormalized_columns,
+            )
+
             try:
                 print("[EXPORT] Rellenando columnas desnormalizadas...")
                 n_fill = backfill_denormalized_columns(DB_PATH)
@@ -587,6 +591,8 @@ No cierres esta ventana hasta que termine.
             return
 
         def _do_import():
+            from app.core.DTE_Recibidos.excel_sync import sync_and_retrain
+
             try:
                 print(f"[IMPORT] Leyendo: {excel_path}")
                 print("[IMPORT] Detectando cambios...\n")
@@ -712,4 +718,3 @@ def open_update_page(parent_window=None):
 
 if __name__ == "__main__":
     open_update_page()
-
