@@ -1236,6 +1236,9 @@ def update_detalle(
     confianza_subcategoria: int,
     origen_clasificacion: str,
     motivo_clasificacion: str,
+    razon_social: str = "",
+    giro: str = "",
+    fecha_emision: str = "",
 ) -> None:
     con.execute(
         """
@@ -1250,7 +1253,10 @@ def update_detalle(
             confianza_subcategoria = ?,
             origen_clasificacion = ?,
             motivo_clasificacion = ?,
-            confianza_ia = ?
+            confianza_ia = ?,
+            razon_social = ?,
+            giro = ?,
+            fecha_emision = ?
         WHERE id_det = ?
         """,
         (
@@ -1264,6 +1270,9 @@ def update_detalle(
             (origen_clasificacion or "").strip() or "SIN_CLASIFICAR",
             (motivo_clasificacion or "").strip(),
             clamp_conf(confianza_subcategoria),
+            (razon_social or "").strip(),
+            (giro or "").strip(),
+            (fecha_emision or "").strip(),
             id_det,
         ),
     )
@@ -1690,6 +1699,9 @@ def main() -> None:
                 confianza_subcategoria=0,
                 origen_clasificacion="REGLA_DESC",
                 motivo_clasificacion="descripcion_vacia",
+                razon_social=proveedor_hint,
+                giro=giro_hint,
+                fecha_emision=fecha_emision,
             )
             con.commit()
             print_line_debug(linea, "REGLA_DESC", 0, 0, categoria, subcategoria, tipo_gasto, "descripcion_vacia", desc)
@@ -1802,6 +1814,9 @@ def main() -> None:
                 confianza_subcategoria=conf_sub,
                 origen_clasificacion=origen_final,
                 motivo_clasificacion=motivo_final,
+                razon_social=proveedor_hint,
+                giro=giro_hint,
+                fecha_emision=fecha_emision,
             )
             con.commit()
             add_doc_category_score(doc_category_scores, doc_id, categoria, conf_cat)
@@ -1837,6 +1852,9 @@ def main() -> None:
                 confianza_subcategoria=0,
                 origen_clasificacion=origen_categoria or "SIN_CLASIFICAR",
                 motivo_clasificacion=motivo,
+                razon_social=proveedor_hint,
+                giro=giro_hint,
+                fecha_emision=fecha_emision,
             )
             con.commit()
             print_line_debug(linea, origen_categoria or "SIN_CLASIFICAR", conf_cat, 0, categoria, subcategoria, tipo_gasto, motivo, desc)
@@ -1889,6 +1907,9 @@ def main() -> None:
             confianza_subcategoria=conf_sub_final,
             origen_clasificacion=origen_sub,
             motivo_clasificacion=motivo_sub,
+            razon_social=proveedor_hint,
+            giro=giro_hint,
+            fecha_emision=fecha_emision,
         )
         con.commit()
         add_doc_category_score(doc_category_scores, doc_id, categoria, conf_cat)

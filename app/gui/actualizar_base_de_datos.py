@@ -13,7 +13,6 @@ import os
 import threading
 import time
 import sqlite3
-import subprocess
 
 # === BASE PATH (raÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­z del proyecto TERRALIX) ===
 BASE_DIR = Path(__file__).resolve().parent.parent.parent  # gui ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ app ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ TERRALIX
@@ -27,6 +26,11 @@ from app.core.DTE_Recibidos import categorizer as CAT
 from app.core.DTE_Recibidos.pipeline_guard import (
     acquire_pipeline_lock,
     release_pipeline_lock,
+)
+from app.core.DTE_Recibidos.excel_sync import (
+    export_to_excel,
+    sync_and_retrain,
+    backfill_denormalized_columns,
 )
 
 # === FUNCIONES DE RUTAS ===
@@ -93,7 +97,7 @@ def create_update_tab(parent):
         canvas.create_image(200, 200, image=logo_image)
         frame.logo_ref = logo_image
     except Exception as e:
-        print("ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â No se pudo cargar Terralix_logo.png:", e)
+        print("No se pudo cargar Terralix_logo.png:", e)
 
     # --- BOTÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN ACTUALIZAR BASE DE DATOS ---
     update_path = relative_to_assets("Actualizar.png")
@@ -103,7 +107,7 @@ def create_update_tab(parent):
         frame.update_ref = update_photo
     except Exception as e:
         update_photo = None
-        print("ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â No se pudo cargar Actualizar.png:", e)
+        print("No se pudo cargar Actualizar.png:", e)
 
     # --- TERMINAL DE SALIDA ---
     console = Text(frame, bg="#EAEAEA", fg="#000000", font=("Consolas", 10))
@@ -470,8 +474,6 @@ No cierres esta ventana hasta que termine.
                 def _restore_ui():
                     try:
                         update_btn.config(state="normal")
-                        ai_btn.config(state="normal")
-                        repair_btn.config(state="normal")
                     except Exception:
                         pass
                     sys.stdout = original_stdout
@@ -502,243 +504,190 @@ No cierres esta ventana hasta que termine.
         command=run_update
     )
     update_btn.place(x=100, y=340)
-    def run_ai_manual():
-        ruta_base = os.getenv("RUTA_PDF_DTE_RECIBIDOS") or ""
-        start_file = filedialog.askopenfilename(
-            title="Selecciona un PDF para leer con IA",
-            initialdir=ruta_base if os.path.isdir(ruta_base) else None,
-            filetypes=[("PDF", "*.pdf")]
-        )
-        if not start_file:
-            print("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ No seleccionaste PDF inicial.")
-            return
-        carpeta = os.path.dirname(start_file)
-        archivos = sorted([f for f in os.listdir(carpeta) if f.lower().endswith(".pdf")])
-        idx = archivos.index(os.path.basename(start_file)) if os.path.basename(start_file) in archivos else 0
-        dbg = os.getenv("AI_DETALLE_DEBUG", "false").lower() == "true"
-        while idx < len(archivos):
-            pdf = os.path.join(carpeta, archivos[idx])
-            print(f"\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€šÃ‚Â§Ãƒâ€šÃ‚Â  IA leyendo: {pdf}")
-            res = AIR.read_one_pdf_with_ai(pdf, debug=dbg)
-            if res.get("ok"):
-                items = res.get("items", [])
-                print(f"ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Guardado en BD {res.get('doc_id')} con {len(items)} ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­tems")
-            else:
-                print(f"ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ IA no pudo procesar {pdf}: {res.get('error')}")
-            idx += 1
-            if idx < len(archivos):
-                if not messagebox.askyesno("Continuar", f"ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿Procesar el siguiente PDF?\n\n{archivos[idx]}"):
-                    break
 
-    ai_btn = Button(
-        frame,
-        text="Leer con IA (manual)",
-        borderwidth=0,
-        highlightthickness=0,
-        relief="flat",
-        bg="#FFFEFF",
-        activebackground="#FFFEFF",
-        command=run_ai_manual
-    )
-    ai_btn.place(x=100, y=480, width=220, height=30)
+    # =================================================================
+    # BOTONES NUEVOS: Excel sync + Configurar rutas
+    # =================================================================
 
-    def _find_python_executable() -> str | None:
-        candidates = [
-            sys.executable,
-            str((BASE_DIR / "terr" / "Scripts" / "python.exe").resolve()),
-        ]
-        for c in candidates:
-            if c and os.path.isfile(c):
-                return c
-        return None
-
-    def _run_command_stream(cmd: list[str]) -> int:
-        try:
-            print("[CMD] " + " ".join(cmd))
-            p = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
-            if p.stdout is not None:
-                for line in p.stdout:
-                    print(line, end="")
-            return int(p.wait())
-        except Exception as e:
-            print(f"[ERROR] No se pudo ejecutar comando: {e}")
-            return 1
-
-    def run_repair_db():
+    def run_export_excel():
+        """Exporta la DB a Excel para revision manual."""
         original_stdout = sys.stdout
         sys.stdout = console_redirect
         console.delete("1.0", END)
 
-        RUTA_PDF = str(os.getenv("RUTA_PDF_DTE_RECIBIDOS") or "")
         DB_PATH = str(os.getenv("DB_PATH_DTE_RECIBIDOS") or "")
-
-        # Si no hay carpeta PDF configurada
-        if not RUTA_PDF or not os.path.exists(RUTA_PDF):
-            print("No se ha configurado carpeta para los PDF.\n")
-            RUTA_PDF = filedialog.askdirectory(title="Selecciona carpeta donde estan tus PDF")
-            if not RUTA_PDF:
-                print("No se selecciono carpeta. Operacion cancelada.")
-                sys.stdout = original_stdout
-                return
-            set_key(ENV_PATH, "RUTA_PDF_DTE_RECIBIDOS", RUTA_PDF)
-            print(f"Carpeta PDF guardada en config.env:\n{RUTA_PDF}\n")
-
-        # Verificar base de datos
-        if not DB_PATH or not os.path.exists(DB_PATH):
-            print("No se ha configurado la ruta de la base de datos.\n")
-            carpeta = filedialog.askdirectory(
-                title="Selecciona la carpeta donde esta/ira DteRecibidos_db.db"
-            )
-            if not carpeta:
-                print("No se selecciono carpeta. Operacion cancelada.")
-                sys.stdout = original_stdout
-                return
-            DB_PATH = os.path.join(carpeta, "DteRecibidos_db.db")
-            set_key(ENV_PATH, "DB_PATH_DTE_RECIBIDOS", DB_PATH)
-            print(f"Ruta DB guardada en config.env:\n{DB_PATH}\n")
-
-        if not messagebox.askyesno(
-            "Confirmar reparacion",
-            (
-                "Se releeran TODOS los PDF locales para reconstruir detalle en la DB.\n\n"
-                "Tambien se pueden eliminar documentos cuyo PDF local no exista.\n"
-                "Este proceso puede tardar varios minutos.\n\n"
-                "Deseas continuar?"
-            ),
-        ):
-            print("Reparacion cancelada por usuario.")
+        if not DB_PATH or not os.path.isfile(DB_PATH):
+            print("[ERROR] No se encontro la base de datos.")
+            print("Configura la ruta en 'Configurar Rutas'.")
             sys.stdout = original_stdout
             return
 
-        os.environ["RUTA_PDF_DTE_RECIBIDOS"] = RUTA_PDF
-        os.environ["DB_PATH_DTE_RECIBIDOS"] = DB_PATH
+        excel_dir = os.path.dirname(DB_PATH)
+        excel_path = os.path.join(excel_dir, "DteRecibidos_revision.xlsx")
 
-        update_btn.config(state="disabled")
-        ai_btn.config(state="disabled")
-        repair_btn.config(state="disabled")
-
-        pb_descargas.stop()
-        pb_descargas.config(mode="indeterminate")
-        pb_descargas["value"] = 0
-        pb_descargas.start(10)
-        lbl_descargas.config(text="Reparacion DB: en curso")
-
-        pb_lectura.stop()
-        pb_lectura.config(mode="indeterminate")
-        pb_lectura["value"] = 0
-        pb_lectura.start(10)
-        lbl_lectura.config(text="Relectura PDF: en curso")
-
-        def ejecutar_reparacion_local(ruta_pdf: str, db_path: str):
-            lock_acquired = False
+        def _do_export():
             try:
-                lock_acquired = acquire_pipeline_lock(blocking=False)
-                if not lock_acquired:
-                    print("[WARN] Ya hay otro proceso DTE ejecutandose. Intenta nuevamente en unos minutos.")
-                    return
+                print("[EXPORT] Rellenando columnas desnormalizadas...")
+                n_fill = backfill_denormalized_columns(DB_PATH)
+                if n_fill > 0:
+                    print(f"[EXPORT] {n_fill} filas actualizadas con datos de documentos.")
 
-                py = _find_python_executable()
-                if not py:
-                    raise RuntimeError("No se encontro ejecutable de Python.")
+                print("[EXPORT] Generando Excel...")
+                result = export_to_excel(DB_PATH, excel_path)
+                if result.get("ok"):
+                    print(f"\n[OK] Excel generado exitosamente:")
+                    print(f"  Ruta: {result['path']}")
+                    print(f"  Filas detalle: {result['n_rows']}")
+                    print(f"  Catalogo: {result['n_catalogo']} combinaciones")
+                    print(f"  Documentos: {result['n_documentos']}")
+                    print("\n  Filas AMARILLAS = necesitan revision")
+                    print("  Filas ROJAS = sin clasificar")
+                    print("\n  Edita las columnas 'categoria', 'subcategoria', 'tipo_gasto'")
+                    print("  Luego usa 'Importar Excel' para aplicar los cambios.\n")
 
-                repair_script = (BASE_DIR / "tools" / "releer_y_reparar_dte.py").resolve()
-                audit_script = (BASE_DIR / "tools" / "auditar_consistencia_facturas.py").resolve()
-                if not repair_script.is_file():
-                    raise RuntimeError(f"No existe script de reparacion: {repair_script}")
-                if not audit_script.is_file():
-                    raise RuntimeError(f"No existe script de auditoria: {audit_script}")
-
-                report_dir = DATA_PATH / "reportes"
-                os.makedirs(report_dir, exist_ok=True)
-                ts = time.strftime("%Y%m%d_%H%M%S")
-                repair_report = report_dir / f"reparacion_gui_{ts}.txt"
-                audit_report = report_dir / f"coherencia_post_reparacion_{ts}.txt"
-                audit_csv = report_dir / f"coherencia_post_reparacion_{ts}.csv"
-
-                print("\n[REPAIR] Iniciando reparacion local de DB (sin descargar desde SII)...\n")
-                cmd_repair = [
-                    py,
-                    str(repair_script),
-                    "--db", db_path,
-                    "--all-docs",
-                    "--delete-missing-local-pdf",
-                    "--apply",
-                    "--report", str(repair_report),
-                ]
-                rc = _run_command_stream(cmd_repair)
-                if rc != 0:
-                    raise RuntimeError(f"releer_y_reparar_dte finalizo con codigo {rc}")
-
-                print("\n[REPAIR] Ejecutando auditoria de coherencia post-reparacion...\n")
-                cmd_audit = [
-                    py,
-                    str(audit_script),
-                    "--db", db_path,
-                    "--check-description-vs-pdf",
-                    "--report", str(audit_report),
-                    "--csv", str(audit_csv),
-                ]
-                rc2 = _run_command_stream(cmd_audit)
-                if rc2 != 0:
-                    raise RuntimeError(f"auditar_consistencia_facturas finalizo con codigo {rc2}")
-
-                print("\n[OK] Reparacion finalizada.\n")
-                print(f"[OK] Reporte reparacion: {repair_report}")
-                print(f"[OK] Reporte coherencia: {audit_report}")
-                print(f"[OK] CSV coherencia (Excel): {audit_csv}")
-                _abrir_reporte(str(repair_report))
-                _abrir_reporte(str(audit_report))
-            except Exception as e:
-                print(f"[ERROR] Fallo durante reparacion de DB:\n{e}")
-            finally:
-                if lock_acquired:
-                    release_pipeline_lock()
-
-                def _restore_ui():
+                    # Abrir Excel automaticamente
                     try:
-                        pb_descargas.stop()
-                        pb_descargas.config(mode="determinate", maximum=1)
-                        pb_descargas["value"] = 1
-                        lbl_descargas.config(text="Reparacion DB: finalizado")
-
-                        pb_lectura.stop()
-                        pb_lectura.config(mode="determinate", maximum=1)
-                        pb_lectura["value"] = 1
-                        lbl_lectura.config(text="Relectura PDF: finalizado")
-
-                        update_btn.config(state="normal")
-                        ai_btn.config(state="normal")
-                        repair_btn.config(state="normal")
+                        if hasattr(os, "startfile"):
+                            os.startfile(excel_path)
                     except Exception:
                         pass
-                    sys.stdout = original_stdout
-                frame.after(0, _restore_ui)
+                else:
+                    print(f"[ERROR] {result.get('error', 'Error desconocido')}")
+            except Exception as e:
+                print(f"[ERROR] Fallo al exportar: {e}")
+            finally:
+                sys.stdout = original_stdout
 
-        hilo_repair = threading.Thread(
-            target=ejecutar_reparacion_local,
-            args=(RUTA_PDF, DB_PATH),
-            daemon=True,
+        threading.Thread(target=_do_export, daemon=True).start()
+
+    def run_import_excel():
+        """Importa cambios del Excel, actualiza DB y reentrena modelo."""
+        original_stdout = sys.stdout
+        sys.stdout = console_redirect
+        console.delete("1.0", END)
+
+        DB_PATH = str(os.getenv("DB_PATH_DTE_RECIBIDOS") or "")
+        if not DB_PATH or not os.path.isfile(DB_PATH):
+            print("[ERROR] No se encontro la base de datos.")
+            sys.stdout = original_stdout
+            return
+
+        excel_dir = os.path.dirname(DB_PATH)
+        default_excel = os.path.join(excel_dir, "DteRecibidos_revision.xlsx")
+
+        excel_path = filedialog.askopenfilename(
+            title="Selecciona el Excel con las correcciones",
+            initialdir=excel_dir,
+            initialfile="DteRecibidos_revision.xlsx",
+            filetypes=[("Excel", "*.xlsx")],
         )
-        hilo_repair.start()
+        if not excel_path:
+            print("No se selecciono archivo. Operacion cancelada.")
+            sys.stdout = original_stdout
+            return
 
-    repair_btn = Button(
-        frame,
-        text="Reparar lectura BD",
-        borderwidth=0,
-        highlightthickness=0,
-        relief="flat",
-        bg="#FFFEFF",
-        activebackground="#FFFEFF",
-        command=run_repair_db
-    )
-    repair_btn.place(x=100, y=440, width=220, height=30)
+        def _do_import():
+            try:
+                print(f"[IMPORT] Leyendo: {excel_path}")
+                print("[IMPORT] Detectando cambios...\n")
+
+                result = sync_and_retrain(excel_path, DB_PATH)
+
+                if not result.get("ok"):
+                    print(f"[ERROR] {result.get('error', 'Error desconocido')}")
+                    return
+
+                n = result["n_changed"]
+                if n == 0:
+                    print("[OK] No se detectaron cambios en el Excel.")
+                    print("Las categorias coinciden con la base de datos.")
+                    return
+
+                print(f"[OK] {n} filas actualizadas en la base de datos:\n")
+                for ch in result.get("changes", [])[:20]:
+                    print(f"  {ch['id_det']}: {ch['categoria']} > {ch['subcategoria']} > {ch['tipo_gasto']}")
+                if n > 20:
+                    print(f"  ... y {n - 20} mas.")
+
+                for w in result.get("warnings", []):
+                    print(f"  [WARN] {w}")
+
+                if result.get("retrained"):
+                    tr = result.get("train_result", {})
+                    print(f"\n[ML] Modelo reentrenado:")
+                    print(f"  Muestras: {tr.get('n_samples', '?')}")
+                    print(f"  Clases: {tr.get('n_classes', '?')}")
+                    acc = tr.get('cat_cv_accuracy')
+                    if acc:
+                        print(f"  Accuracy categorias: {acc:.1%}")
+                    print("\n[OK] El modelo ahora aprende de tus correcciones.")
+                else:
+                    print("\n[WARN] No se pudo reentrenar el modelo.")
+
+            except Exception as e:
+                print(f"[ERROR] Fallo al importar: {e}")
+            finally:
+                sys.stdout = original_stdout
+
+        threading.Thread(target=_do_import, daemon=True).start()
+
+    def run_change_paths():
+        """Permite cambiar las rutas de PDF y base de datos."""
+        original_stdout = sys.stdout
+        sys.stdout = console_redirect
+        console.delete("1.0", END)
+
+        current_pdf = str(os.getenv("RUTA_PDF_DTE_RECIBIDOS") or "(no configurado)")
+        current_db = str(os.getenv("DB_PATH_DTE_RECIBIDOS") or "(no configurado)")
+
+        print("=== CONFIGURACION DE RUTAS ===\n")
+        print(f"Carpeta PDF actual: {current_pdf}")
+        print(f"Base de datos actual: {current_db}\n")
+
+        # Pedir nueva carpeta PDF
+        change_pdf = messagebox.askyesno(
+            "Cambiar carpeta PDF",
+            f"Carpeta PDF actual:\n{current_pdf}\n\nDeseas cambiarla?",
+        )
+        if change_pdf:
+            new_pdf = filedialog.askdirectory(
+                title="Selecciona nueva carpeta para PDFs",
+                initialdir=current_pdf if os.path.isdir(current_pdf) else None,
+            )
+            if new_pdf:
+                set_key(str(ENV_PATH), "RUTA_PDF_DTE_RECIBIDOS", new_pdf)
+                os.environ["RUTA_PDF_DTE_RECIBIDOS"] = new_pdf
+                print(f"[OK] Carpeta PDF actualizada: {new_pdf}")
+            else:
+                print("[INFO] Carpeta PDF sin cambios.")
+
+        # Pedir nueva ruta DB
+        change_db = messagebox.askyesno(
+            "Cambiar base de datos",
+            f"Base de datos actual:\n{current_db}\n\nDeseas cambiarla?",
+        )
+        if change_db:
+            new_db_dir = filedialog.askdirectory(
+                title="Selecciona carpeta para la base de datos",
+                initialdir=os.path.dirname(current_db) if os.path.isdir(os.path.dirname(current_db)) else None,
+            )
+            if new_db_dir:
+                new_db = os.path.join(new_db_dir, "DteRecibidos_db.db")
+                set_key(str(ENV_PATH), "DB_PATH_DTE_RECIBIDOS", new_db)
+                os.environ["DB_PATH_DTE_RECIBIDOS"] = new_db
+                print(f"[OK] Base de datos actualizada: {new_db}")
+            else:
+                print("[INFO] Base de datos sin cambios.")
+
+        print("\n=== Rutas actuales ===")
+        print(f"  PDF: {os.getenv('RUTA_PDF_DTE_RECIBIDOS', '(no configurado)')}")
+        print(f"  DB:  {os.getenv('DB_PATH_DTE_RECIBIDOS', '(no configurado)')}")
+        sys.stdout = original_stdout
+
+    # Expose functions for menu bar access
+    frame.run_export_excel = run_export_excel
+    frame.run_import_excel = run_import_excel
+    frame.run_change_paths = run_change_paths
 
     return frame
 
@@ -748,13 +697,13 @@ def open_update_page(parent_window=None):
     window.geometry("917x500")
     window.configure(bg="#FFFEFF")
     window.resizable(False, False)
-    window.title("Terralix - ActualizaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n de Base de Datos")
+    window.title("Terralix - Actualizacion de Base de Datos")
     window.protocol("WM_DELETE_WINDOW", lambda: confirmar_salida(window))
 
     try:
         window.iconbitmap(relative_to_assets("Terralix_Logo.ico"))
     except Exception as e:
-        print("ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â No se encontrÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ el icono .ico:", e)
+        print("No se encontro el icono .ico:", e)
 
     tab = create_update_tab(window)
     tab.pack(fill="both", expand=True)

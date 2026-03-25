@@ -8,7 +8,6 @@ from pathlib import Path
 import sys
 import os
 
-from TERRALIX import check_for_updates_on_demand
 from app.core.DTE_Recibidos.weekly_background_checker import start_weekly_checker
 
 # === BASE PATH (raiz del proyecto TERRALIX) ===
@@ -35,6 +34,19 @@ def relative_to_assets(path: str) -> Path:
 
 
 from app.gui.actualizar_base_de_datos import create_update_tab
+
+
+def _open_manual():
+    """Abre el manual de usuario .docx con la aplicacion predeterminada."""
+    manual_path = BASE_DIR / "data" / "Manual_Terralix_ERP.pdf"
+    if manual_path.is_file():
+        os.startfile(str(manual_path))
+    else:
+        from tkinter import messagebox
+        messagebox.showwarning(
+            "Manual no encontrado",
+            f"No se encontro el manual en:\n{manual_path}",
+        )
 
 
 def open_main_app(login_window: Tk | None):
@@ -77,18 +89,37 @@ def open_main_app(login_window: Tk | None):
     notebook = ttk.Notebook(root)
     notebook.pack(fill="both", expand=True)
 
-    menubar = tk.Menu(root)
-    opciones_menu = tk.Menu(menubar, tearoff=0)
-    opciones_menu.add_command(
-        label="Buscar actualizaciones",
-        command=lambda: check_for_updates_on_demand(root),
-    )
-    menubar.add_cascade(label="Opciones", menu=opciones_menu)
-    root.config(menu=menubar)
-
     actualizar_tab = create_update_tab(notebook)
     notebook.add(actualizar_tab, text="Actualizar")
     notebook.select(actualizar_tab)
+
+    menubar = tk.Menu(root)
+
+    excel_menu = tk.Menu(menubar, tearoff=0)
+    excel_menu.add_command(
+        label="Exportar Excel",
+        command=lambda: actualizar_tab.run_export_excel(),
+    )
+    excel_menu.add_command(
+        label="Importar Excel",
+        command=lambda: actualizar_tab.run_import_excel(),
+    )
+    menubar.add_cascade(label="Excel", menu=excel_menu)
+
+    opciones_menu = tk.Menu(menubar, tearoff=0)
+    opciones_menu.add_command(
+        label="Configurar Rutas (PDF / Base de Datos)",
+        command=lambda: actualizar_tab.run_change_paths(),
+    )
+    menubar.add_cascade(label="Opciones", menu=opciones_menu)
+
+    ayuda_menu = tk.Menu(menubar, tearoff=0)
+    ayuda_menu.add_command(
+        label="Manual de usuario",
+        command=lambda: _open_manual(),
+    )
+    menubar.add_cascade(label="Ayuda", menu=ayuda_menu)
+    root.config(menu=menubar)
 
     try:
         started = start_weekly_checker()

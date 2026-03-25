@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "detalle": "Peaje Autopista Central",
+      "cantidad": 1.0,
+      "precio_unitario": 14382.0,
+      "monto_item": 14382.0
+    },
+    {
+      "detalle": "Intereses por Mora",
+      "cantidad": 1.0,
+      "precio_unitario": 88.0,
+      "monto_item": 88.0
+    }
+  ],
+  "source": "openai"
+}
