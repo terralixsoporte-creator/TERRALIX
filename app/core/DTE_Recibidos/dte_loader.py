@@ -420,6 +420,11 @@ def clean_giro(raw: str) -> str:
 
 # Asegura columnas nuevas
 # compatibilidad con DBs antiguas (si ya existe una DB)
+add_column_if_missing(engine, "documentos", "ADD COLUMN fecha_emision DATE")
+add_column_if_missing(engine, "documentos", "ADD COLUMN IVA FLOAT")
+add_column_if_missing(engine, "documentos", "ADD COLUMN monto_excento FLOAT")
+add_column_if_missing(engine, "documentos", "ADD COLUMN impuesto_adicional FLOAT")
+add_column_if_missing(engine, "documentos", "ADD COLUMN monto_total FLOAT")
 add_column_if_missing(engine, "documentos", "ADD COLUMN referencia TEXT")
 add_column_if_missing(engine, "documentos", "ADD COLUMN DTE_referencia TEXT")
 add_column_if_missing(engine, "documentos", "ADD COLUMN giro TEXT")
@@ -531,6 +536,7 @@ def guardar_en_bd(datos_raw, ruta_pdf):
     giro_raw       = datos_raw.get("Giro", "")
     monto_neto_raw = datos_raw.get("Monto Neto", "0")
     iva_raw        = datos_raw.get("IVA", "")
+    imp_adic_raw   = datos_raw.get("Impuesto Adicional", datos_raw.get("impuesto_adicional", "0"))
     total_raw      = datos_raw.get("Total", "")
 
     # Limpiezas/parseo robusto (OCR)
@@ -561,6 +567,7 @@ def guardar_en_bd(datos_raw, ruta_pdf):
     # IVA / montos
     monto_neto = extraer_monto(monto_neto_raw)
     iva_val    = parse_iva(iva_raw, monto_neto=monto_neto)
+    impuesto_adicional_val = extraer_monto(imp_adic_raw, default=0.0)
     total_val  = extraer_monto(total_raw) or monto_neto  # si no hay total, al menos guarda neto
 
     # ID determinÃ­stico
@@ -598,7 +605,7 @@ def guardar_en_bd(datos_raw, ruta_pdf):
             "fecha_emision": fecha,
             "IVA": iva_val,
             "monto_excento": 0.0,
-            "impuesto_adicional": 0.0,
+            "impuesto_adicional": impuesto_adicional_val,
             "monto_total": total_val,
             # intenta extraer referencia desde etiquetas OCR (cualquier clave que contenga 'referen')
             "referencia": "",

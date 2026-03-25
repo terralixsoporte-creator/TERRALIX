@@ -5,6 +5,44 @@ import os
 import sys
 from pathlib import Path
 
+
+def _bootstrap_local_site_packages() -> None:
+    """
+    Permite ejecutar `python TERRALIX.py` sin activar venv manualmente.
+    Si existe un entorno local (terr/.venv), agrega su site-packages al inicio de sys.path.
+    """
+    if getattr(sys, "frozen", False):
+        return
+    if os.getenv("TERRALIX_DISABLE_LOCAL_VENV_BOOTSTRAP", "").strip() == "1":
+        return
+
+    base_dir = Path(__file__).resolve().parent
+    candidates = []
+    if os.name == "nt":
+        candidates.extend(
+            [
+                base_dir / "terr" / "Lib" / "site-packages",
+                base_dir / ".venv" / "Lib" / "site-packages",
+            ]
+        )
+    else:
+        py_tag = f"python{sys.version_info.major}.{sys.version_info.minor}"
+        candidates.extend(
+            [
+                base_dir / "terr" / "lib" / py_tag / "site-packages",
+                base_dir / ".venv" / "lib" / py_tag / "site-packages",
+            ]
+        )
+
+    for p in candidates:
+        p_str = str(p)
+        if p.exists() and p_str not in sys.path:
+            sys.path.insert(0, p_str)
+            break
+
+
+_bootstrap_local_site_packages()
+
 from dotenv import load_dotenv, set_key
 import tkinter as tk
 from tkinter import messagebox, filedialog

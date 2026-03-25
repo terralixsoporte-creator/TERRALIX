@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "detalle": "NYLON ORILLADORA REFORZADO 3.0MM X 15 MTS. 3.0X15-RE",
+      "cantidad": 2.0,
+      "precio_unitario": 4990.0,
+      "monto_item": 9980.0,
+      "unidad": "UN",
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

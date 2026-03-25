@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "detalle": "OVEROL PILOTO AZUL - S M L XL XXL",
+      "cantidad": 1.0,
+      "precio_unitario": 7647.0,
+      "monto_item": 7647.0,
+      "unidad": "UN"
+    },
+    {
+      "detalle": "NYLON P ORILLADORA 3 3",
+      "cantidad": 7.0,
+      "precio_unitario": 420.0,
+      "monto_item": 2941.0,
+      "unidad": "UN"
+    }
+  ],
+  "source": "openai"
+}
