@@ -39,18 +39,17 @@ def _parse_date_iso(raw: str) -> str | None:
 
 
 def create_applications_tab(parent):
-    frame = Frame(parent, bg="#FFFEFF", width=917, height=500)
-    frame.pack_propagate(False)
+    frame = Frame(parent, bg="#FFFEFF")
 
     container = ttk.Frame(frame, padding=8)
     container.pack(fill="both", expand=True)
-    container.columnconfigure(0, weight=0)
-    container.columnconfigure(1, weight=1)
+    container.columnconfigure(0, weight=1)
+    container.columnconfigure(1, weight=2)
     container.rowconfigure(0, weight=1)
     container.rowconfigure(1, weight=0)
 
     left = ttk.LabelFrame(container, text="Nueva aplicacion de campo", padding=10)
-    left.grid(row=0, column=0, sticky="nsw", padx=(0, 8))
+    left.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
     left.columnconfigure(0, weight=1)
 
     right = ttk.LabelFrame(container, text="Calendario y gestion", padding=8)

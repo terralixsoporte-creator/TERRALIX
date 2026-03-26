@@ -37,14 +37,13 @@ def _column_label(col_name: str) -> str:
 
 
 def create_inventory_tab(parent):
-    frame = Frame(parent, bg="#FFFEFF", width=917, height=500)
-    frame.pack_propagate(False)
+    frame = Frame(parent, bg="#FFFEFF")
 
     container = ttk.Frame(frame, padding=10)
     container.pack(fill="both", expand=True)
 
-    container.columnconfigure(0, weight=0)
-    container.columnconfigure(1, weight=1)
+    container.columnconfigure(0, weight=1)
+    container.columnconfigure(1, weight=2)
     container.rowconfigure(1, weight=1)
 
     top = ttk.Frame(container)
@@ -63,7 +62,7 @@ def create_inventory_tab(parent):
     search_entry.grid(row=0, column=3, sticky="ew")
 
     left = ttk.LabelFrame(container, text="Registrar uso", padding=10)
-    left.grid(row=1, column=0, sticky="nsw", padx=(0, 10))
+    left.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
 
     right = ttk.LabelFrame(container, text="Stock actual", padding=8)
     right.grid(row=1, column=1, sticky="nsew")

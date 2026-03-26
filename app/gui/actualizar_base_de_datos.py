@@ -64,35 +64,46 @@ class ConsoleRedirect(io.StringIO):
 # --- TAB (Frame) DE ACTUALIZACIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN ---
 def create_update_tab(parent):
     """Crea y devuelve un Frame con la UI de actualizaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n, listo para aÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â±adirse a un Notebook."""
-    frame = Frame(parent, bg="#FFFEFF", width=917, height=500)
-    frame.pack_propagate(False)
+    BASE_W = 917
+    BASE_H = 500
+
+    frame = Frame(parent, bg="#FFFEFF")
 
     # --- CANVAS PRINCIPAL ---
     canvas = Canvas(
         frame,
         bg="#FFFEFF",
-        height=500,
-        width=917,
         bd=0,
         highlightthickness=0,
         relief="ridge"
     )
-    canvas.place(x=0, y=0)
+    canvas.place(relx=0, rely=0, relwidth=1, relheight=1)
 
     # --- LOGO IZQUIERDA ---
+    logo_raw = None
+    logo_item = None
     logo_path = relative_to_assets("Terralix_logo.png")
     try:
-        logo_img = Image.open(logo_path).resize((400, 400), Image.LANCZOS)
+        logo_raw = Image.open(logo_path)
+        logo_img = logo_raw.resize((400, 400), Image.LANCZOS)
         logo_image = ImageTk.PhotoImage(logo_img)
-        canvas.create_image(200, 200, image=logo_image)
+        logo_item = canvas.create_image(200, 200, image=logo_image)
         frame.logo_ref = logo_image
     except Exception as e:
         print("No se pudo cargar Terralix_logo.png:", e)
 
+    left_panel_id = canvas.create_rectangle(40.0, 25.0, 411.0, 455.0, fill="#FFFFFF", outline="")
+    try:
+        canvas.tag_lower(left_panel_id)
+    except Exception:
+        pass
+
     # --- BOTÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN ACTUALIZAR BASE DE DATOS ---
+    update_raw = None
     update_path = relative_to_assets("Actualizar.png")
     try:
-        update_img = Image.open(update_path).resize((220, 50), Image.LANCZOS)
+        update_raw = Image.open(update_path)
+        update_img = update_raw.resize((220, 50), Image.LANCZOS)
         update_photo = ImageTk.PhotoImage(update_img)
         frame.update_ref = update_photo
     except Exception as e:
@@ -579,6 +590,131 @@ No cierres esta ventana hasta que termine.
     )
     update_btn.place(x=100, y=340)
 
+    # --- LAYOUT RESPONSIVE (escalado proporcional) ---
+    base_layout = {
+        "console": (460, 80, 420, 370),
+        "scrollbar": (880, 80, 16, 370),
+        "lbl_descargas": (460, 460, None, None),
+        "pb_descargas": (560, 460, 320, 18),
+        "lbl_lectura": (460, 490, None, None),
+        "pb_lectura": (560, 490, 320, 18),
+        "update_btn": (100, 340, 220, 50),
+        "logo_center": (200, 200),
+        "logo_size": (400, 400),
+        "left_panel": (40, 25, 411, 455),
+    }
+    _resize_job = {"id": None}
+
+    def _apply_scaled_layout() -> None:
+        width = max(1, int(frame.winfo_width() or BASE_W))
+        height = max(1, int(frame.winfo_height() or BASE_H))
+        scale = min(width / BASE_W, height / BASE_H)
+        content_w = BASE_W * scale
+        content_h = BASE_H * scale
+        off_x = int((width - content_w) / 2)
+        off_y = int((height - content_h) / 2)
+
+        # Fondo/panel izquierdo en canvas
+        lp = base_layout["left_panel"]
+        canvas.coords(
+            left_panel_id,
+            off_x + int(lp[0] * scale),
+            off_y + int(lp[1] * scale),
+            off_x + int(lp[2] * scale),
+            off_y + int(lp[3] * scale),
+        )
+
+        # Logo
+        if logo_item is not None and logo_raw is not None:
+            lz = base_layout["logo_size"]
+            lw = max(40, int(lz[0] * scale))
+            lh = max(40, int(lz[1] * scale))
+            logo_img = logo_raw.resize((lw, lh), Image.LANCZOS)
+            logo_photo = ImageTk.PhotoImage(logo_img)
+            frame.logo_ref = logo_photo
+            canvas.itemconfigure(logo_item, image=logo_photo)
+
+            lc = base_layout["logo_center"]
+            canvas.coords(
+                logo_item,
+                off_x + int(lc[0] * scale),
+                off_y + int(lc[1] * scale),
+            )
+
+        # Consola y controles de progreso
+        c = base_layout["console"]
+        console.place(
+            x=off_x + int(c[0] * scale),
+            y=off_y + int(c[1] * scale),
+            width=max(200, int(c[2] * scale)),
+            height=max(120, int(c[3] * scale)),
+        )
+        console.config(font=("Consolas", max(8, int(10 * scale))))
+
+        sb = base_layout["scrollbar"]
+        scrollbar.place(
+            x=off_x + int(sb[0] * scale),
+            y=off_y + int(sb[1] * scale),
+            width=max(10, int(sb[2] * scale)),
+            height=max(120, int(sb[3] * scale)),
+        )
+
+        ld = base_layout["lbl_descargas"]
+        lbl_descargas.place(
+            x=off_x + int(ld[0] * scale),
+            y=off_y + int(ld[1] * scale),
+        )
+        lbl_descargas.config(font=("Segoe UI", max(8, int(9 * scale))))
+
+        pd = base_layout["pb_descargas"]
+        pb_descargas.place(
+            x=off_x + int(pd[0] * scale),
+            y=off_y + int(pd[1] * scale),
+            width=max(120, int(pd[2] * scale)),
+            height=max(12, int(pd[3] * scale)),
+        )
+
+        ll = base_layout["lbl_lectura"]
+        lbl_lectura.place(
+            x=off_x + int(ll[0] * scale),
+            y=off_y + int(ll[1] * scale),
+        )
+        lbl_lectura.config(font=("Segoe UI", max(8, int(9 * scale))))
+
+        pl = base_layout["pb_lectura"]
+        pb_lectura.place(
+            x=off_x + int(pl[0] * scale),
+            y=off_y + int(pl[1] * scale),
+            width=max(120, int(pl[2] * scale)),
+            height=max(12, int(pl[3] * scale)),
+        )
+
+        ub = base_layout["update_btn"]
+        ux = off_x + int(ub[0] * scale)
+        uy = off_y + int(ub[1] * scale)
+        uw = max(120, int(ub[2] * scale))
+        uh = max(28, int(ub[3] * scale))
+
+        if update_raw is not None:
+            upd_img = update_raw.resize((uw, uh), Image.LANCZOS)
+            upd_photo = ImageTk.PhotoImage(upd_img)
+            frame.update_ref = upd_photo
+            update_btn.config(image=upd_photo)
+
+        update_btn.place(x=ux, y=uy, width=uw, height=uh)
+
+    def _queue_scaled_layout(_event=None) -> None:
+        job_id = _resize_job.get("id")
+        if job_id:
+            try:
+                frame.after_cancel(job_id)
+            except Exception:
+                pass
+        _resize_job["id"] = frame.after(25, _apply_scaled_layout)
+
+    frame.bind("<Configure>", _queue_scaled_layout)
+    frame.after(0, _apply_scaled_layout)
+
     # =================================================================
     # BOTONES NUEVOS: Excel sync + Configurar rutas
     # =================================================================
@@ -840,9 +976,10 @@ No cierres esta ventana hasta que termine.
 # --- INTERFAZ DE ACTUALIZACIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN COMO VENTANA (compatibilidad anterior) ---
 def open_update_page(parent_window=None):
     window = Toplevel()
-    window.geometry("917x500")
+    window.geometry("1100x650")
     window.configure(bg="#FFFEFF")
-    window.resizable(False, False)
+    window.minsize(917, 500)
+    window.resizable(True, True)
     window.title("Terralix - Actualizacion de Base de Datos")
     window.protocol("WM_DELETE_WINDOW", lambda: confirmar_salida(window))
 

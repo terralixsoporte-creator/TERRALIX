@@ -72,9 +72,10 @@ def open_main_app(login_window: Tk | None):
         except Exception:
             pass
 
-    root.geometry("917x500")
+    root.geometry("1100x650")
     root.configure(bg="#FFFEFF")
-    root.resizable(False, False)
+    root.minsize(917, 500)
+    root.resizable(True, True)
     root.title("Terralix ERP")
 
     try:
