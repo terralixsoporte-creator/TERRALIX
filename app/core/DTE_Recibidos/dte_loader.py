@@ -577,18 +577,51 @@ def existe_en_bd(conn, tipo_doc, rut_emisor, folio):
     q = select(documentos.c.id_doc).where(documentos.c.id_doc == doc_id)
     return conn.execute(q).fetchone() is not None
 
-def _insertar_items_detalle(conn, doc_id: str, items: list[dict]):
+def _es_nota_credito(tipo_doc: str = "", doc_id: str = "") -> bool:
+    def _norm(s: str) -> str:
+        s = _strip_accents_keep_enie_to_n(str(s or ""))
+        s = s.lower().replace("_", " ")
+        return _collapse_spaces(s)
+
+    for cand in (_norm(tipo_doc), _norm(doc_id)):
+        if not cand:
+            continue
+        if cand == "61" or cand.startswith("61 "):
+            return True
+        if "nota" in cand and "credito" in cand:
+            return True
+    return False
+
+def _forzar_montos_negativos_nota_credito(conn, doc_id: str):
+    try:
+        conn.exec_driver_sql(
+            """
+            UPDATE detalle
+               SET precio_unitario = -ABS(COALESCE(precio_unitario, 0)),
+                   monto_item      = -ABS(COALESCE(monto_item, 0))
+             WHERE id_doc = ?
+            """,
+            (doc_id,),
+        )
+    except Exception as e:
+        print(f"No se pudo normalizar montos negativos para NC ({doc_id}): {e}")
+
+def _insertar_items_detalle(conn, doc_id: str, items: list[dict], tipo_doc: str = ""):
     def _collapse_spaces(s: str) -> str:
         return " ".join(s.split())
     def _f(x):
         """Convierte montos en formato chileno a float."""
         if not x or x == "null" or x is None:
             return 0.0
+        if isinstance(x, (int, float)):
+            return float(x)
         try:
             # Siempre usar _to_float para manejar formato chileno correctamente
             return _to_float(str(x))
         except Exception:
             return extraer_monto(str(x), default=0.0)
+
+    is_nota_credito = _es_nota_credito(tipo_doc=tipo_doc, doc_id=doc_id)
 
     for idx, it in enumerate(items, start=1):
         codigo_raw = it.get("codigo", "")
@@ -596,6 +629,13 @@ def _insertar_items_detalle(conn, doc_id: str, items: list[dict]):
         unidad_raw = it.get("unidad", "")
         desc_txt = clean_descripcion_detalle(it.get("detalle", it.get("descripcion", "")))
         unidad_txt = resolver_unidad_detalle(desc_txt, str(unidad_raw).strip() if unidad_raw is not None else "")
+
+        precio_unitario_val = _f(it.get("precio_unitario", 0))
+        monto_item_val = _f(it.get("monto_item", 0))
+        if is_nota_credito:
+            precio_unitario_val = -abs(precio_unitario_val)
+            monto_item_val = -abs(monto_item_val)
+
         row = {
             "id_det": f"{doc_id}:{idx}",
             "id_doc": doc_id,
@@ -604,10 +644,10 @@ def _insertar_items_detalle(conn, doc_id: str, items: list[dict]):
             "descripcion": desc_txt,
             "unidad": unidad_txt,
             "cantidad": (it.get("cantidad", 0)),
-            "precio_unitario": (it.get("precio_unitario", 0)),
+            "precio_unitario": precio_unitario_val,
             "impuesto_adicional": (it.get("impuesto_adicional", 0)),
             "Descuento": (it.get("descuento", 0)),
-            "monto_item": (it.get("monto_item", 0))
+            "monto_item": monto_item_val,
         }
         try:
             conn.execute(detalle.insert().values(**row))
@@ -675,6 +715,8 @@ def guardar_en_bd(datos_raw, ruta_pdf):
             doc_id_dup = doc_id
             det_count = _detalles_count(conn, doc_id_dup)
             if det_count > 0:
+                if _es_nota_credito(tipo_doc=tipo_doc, doc_id=doc_id_dup):
+                    _forzar_montos_negativos_nota_credito(conn, doc_id_dup)
                 # Documento duplicado con detalle existente: sin cambios
                 print(f"Leido: {doc_id_dup} (ya existia con detalle, sin subida)")
                 return
@@ -683,7 +725,7 @@ def guardar_en_bd(datos_raw, ruta_pdf):
                 items_dup = datos_raw.get("__items_detalle__") or []
                 if items_dup:
                     try:
-                        _insertar_items_detalle(conn, doc_id_dup, items_dup)
+                        _insertar_items_detalle(conn, doc_id_dup, items_dup, tipo_doc=tipo_doc)
                         print(f"Subida a BD: {doc_id_dup} (detalle agregado)")
                     except Exception as e:
                         print(f"No se pudo insertar detalle (duplicado): {e}")
@@ -713,7 +755,7 @@ def guardar_en_bd(datos_raw, ruta_pdf):
             # Inserta items de detalle si vienen desde ai_reader
             items = datos_raw.get("__items_detalle__") or []
             if items:
-                _insertar_items_detalle(conn, doc_id, items)
+                _insertar_items_detalle(conn, doc_id, items, tipo_doc=tipo_doc)
             # Intenta vincular referencia
             try:
                 ref_text = ""

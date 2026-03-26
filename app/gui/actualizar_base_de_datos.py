@@ -472,7 +472,7 @@ No cierres esta ventana hasta que termine.
         def run_inventory_autosync(db_path: str):
             from app.core.DTE_Recibidos import inventory as INV
 
-            print("[6/6] Sincronizando inventario teorico (automatico, sin filtro INSUMOS_AGRICOLAS, ignora codigo='-')...\n")
+            print("[6/6] Sincronizando inventario teorico (automatico, solo Facturas, ignora codigo='-')...\n")
             result = INV.sync_entries_from_detalle(
                 db_path=db_path,
                 only_categoria=None,
@@ -483,6 +483,7 @@ No cierres esta ventana hasta que termine.
 
             stats = result.get("catalog_stats", {}) or {}
             purge = result.get("purge_ignored_codes", {}) or {}
+            removed_non_fact = int(result.get("removed_non_factura_movements", 0) or 0)
             print(
                 "[OK] Inventario sincronizado: "
                 f"filas_detalle={result.get('rows_scanned', 0)} | "
@@ -492,6 +493,7 @@ No cierres esta ventana hasta que termine.
                 f"cat_upd={result.get('catalog_updated', 0)} | "
                 f"stats_upd={stats.get('catalog_updated_stats', 0)} | "
                 f"variaciones_si={stats.get('codes_variaciones_si', 0)} | "
+                f"purge_no_factura_mov={removed_non_fact} | "
                 f"purge_cod_ignorado(cat={purge.get('catalog_deleted', 0)}, mov={purge.get('movements_deleted', 0)})\n"
             )
 

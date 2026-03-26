@@ -276,6 +276,7 @@ def create_inventory_tab(parent):
                 return
             stats = res.get("catalog_stats", {}) or {}
             purge = res.get("purge_ignored_codes", {}) or {}
+            removed_non_fact = int(res.get("removed_non_factura_movements", 0) or 0)
             log(
                 "[OK] Sync DTE inventario: "
                 f"filas={res.get('rows_scanned', 0)} | "
@@ -285,13 +286,15 @@ def create_inventory_tab(parent):
                 f"cat_upd={res.get('catalog_updated', 0)} | "
                 f"stats_upd={stats.get('catalog_updated_stats', 0)} | "
                 f"variaciones_si={stats.get('codes_variaciones_si', 0)} | "
+                f"purge_no_factura_mov={removed_non_fact} | "
                 f"purge_cod_ignorado(cat={purge.get('catalog_deleted', 0)}, mov={purge.get('movements_deleted', 0)}) | "
+                "filtro_doc=Factura_* | "
                 "filtro_categoria=ninguno"
             )
             refresh_products_combo()
             refresh_stock_table()
 
-        run_async("[REFRESH] Sincronizando inventario desde detalle DTE...", _worker, _done)
+        run_async("[REFRESH] Sincronizando inventario desde detalle DTE (solo facturas)...", _worker, _done)
 
     def _begin_cell_edit(event) -> None:
         # Solo edición de celdas de datos (no encabezados/espacios)
@@ -415,18 +418,22 @@ def create_inventory_tab(parent):
                             f"(delta={_fmt_qty(res.get('delta', 0.0))})"
                         )
                 elif action == "last_date_update":
-                    log(
-                        f"[OK] Editado {codigo}::ultima_fecha | "
-                        f"{res.get('before', '')} -> {res.get('after', '')}"
-                    )
+                    if res.get("no_change"):
+                        log(f"[INFO] {codigo}::ultima_fecha sin cambios.")
+                    else:
+                        log(
+                            f"[OK] Editado {codigo}::ultima_fecha | "
+                            f"{res.get('before', '')} -> {res.get('after', '')} "
+                            "(override visual)"
+                        )
                 elif action == "last_type_update":
                     if res.get("no_change"):
                         log(f"[INFO] {codigo}::ultima_modificacion_tipo sin cambios.")
                     else:
                         log(
                             f"[OK] Editado {codigo}::ultima_modificacion_tipo | "
-                            f"{res.get('before', '')} -> {res.get('after', '')} | "
-                            f"stock {_fmt_qty(res.get('stock_before', 0.0))} -> {_fmt_qty(res.get('stock_after', 0.0))}"
+                            f"{res.get('before', '')} -> {res.get('after', '')} "
+                            "(override visual)"
                         )
                 else:
                     log(f"[OK] Cambio aplicado en {codigo}::{col_name}.")

@@ -421,7 +421,7 @@ def _refresh_catalog_stats_from_detalle(
 ) -> Dict[str, Any]:
     """
     Recalcula ocurrencias/variaciones por codigo usando detalle.
-    Respeta la exclusion de codigos no inventariables ('-').
+    Respeta la exclusion de codigos no inventariables ('-') y usa solo Facturas.
     """
     if not _table_exists(con, "detalle"):
         return {"ok": False, "error": "No existe la tabla detalle"}
@@ -443,6 +443,8 @@ def _refresh_catalog_stats_from_detalle(
         "TRIM(COALESCE(d.codigo, '')) <> ''",
         "UPPER(TRIM(COALESCE(d.codigo, ''))) <> '-'",
     ]
+    if "id_doc" in detalle_cols:
+        where_parts.append("COALESCE(d.id_doc, '') LIKE 'Factura_%'")
     params: List[Any] = []
     if only_categoria and "categoria" in detalle_cols:
         where_parts.append("UPPER(TRIM(COALESCE(d.categoria, ''))) = ?")
@@ -639,13 +641,25 @@ def sync_entries_from_detalle(
             return {"ok": False, "error": "No existe la tabla 'detalle' en la base de datos."}
 
         detalle_cols = {r[1] for r in con.execute("PRAGMA table_info(detalle);").fetchall()}
-        required = {"id_det", "codigo", "descripcion", "cantidad"}
+        required = {"id_det", "id_doc", "codigo", "descripcion", "cantidad"}
         missing = sorted(required - detalle_cols)
         if missing:
             return {"ok": False, "error": f"Faltan columnas en detalle: {', '.join(missing)}"}
 
+        removed_non_factura_movements = con.execute(
+            """
+            DELETE FROM inventario_movimientos
+            WHERE fuente = 'DTE_DETALLE'
+              AND (
+                    COALESCE(source_hash, '') = ''
+                 OR COALESCE(source_hash, '') NOT LIKE 'DTE:Factura_%'
+              )
+            """
+        ).rowcount
+
         select_parts = [
             "d.id_det",
+            "COALESCE(d.id_doc, '') AS id_doc",
             "COALESCE(d.codigo, '') AS codigo",
             "COALESCE(d.descripcion, '') AS descripcion",
             "COALESCE(d.cantidad, 0) AS cantidad",
@@ -660,6 +674,7 @@ def sync_entries_from_detalle(
             WHERE TRIM(COALESCE(d.codigo, '')) <> ''
               AND UPPER(TRIM(COALESCE(d.codigo, ''))) <> '-'
               AND COALESCE(d.cantidad, 0) > 0
+              AND COALESCE(d.id_doc, '') LIKE 'Factura_%'
         """
         params: List[Any] = []
         if only_categoria and "categoria" in detalle_cols:
@@ -683,6 +698,7 @@ def sync_entries_from_detalle(
             categoria = _normalize_text(r["categoria"]).upper()
             cantidad = _to_float(r["cantidad"])
             fecha = _coerce_date_iso(r["fecha_emision"])
+            id_det = _normalize_text(r["id_det"])
 
             old_cat = con.execute(
                 "SELECT codigo, descripcion_estandar, unidad_base, categoria FROM inventario_catalogo WHERE codigo = ?",
@@ -721,7 +737,7 @@ def sync_entries_from_detalle(
                     )
                     cat_updated += 1
 
-            source_hash = f"DTE:{_normalize_text(r['id_det'])}"
+            source_hash = f"DTE:{id_det}"
             old_mov = con.execute(
                 "SELECT id FROM inventario_movimientos WHERE source_hash = ?",
                 (source_hash,),
@@ -739,7 +755,7 @@ def sync_entries_from_detalle(
                         fecha,
                         cantidad,
                         unidad,
-                        _normalize_text(r["id_det"]),
+                        id_det,
                         descripcion,
                         source_hash,
                     ),
@@ -765,7 +781,7 @@ def sync_entries_from_detalle(
                         fecha,
                         cantidad,
                         unidad,
-                        _normalize_text(r["id_det"]),
+                        id_det,
                         descripcion,
                         source_hash,
                     ),
@@ -787,7 +803,9 @@ def sync_entries_from_detalle(
             "catalog_updated": cat_updated,
             "catalog_stats": stats,
             "purge_ignored_codes": purge,
+            "removed_non_factura_movements": int(removed_non_factura_movements or 0),
             "categoria_filtro": only_categoria or "(todas)",
+            "doc_tipo_filtro": "Factura_*",
         }
     finally:
         con.close()
@@ -917,8 +935,8 @@ def update_stock_cell(
       - descripcion_estandar: actualiza catalogo
       - unidad_base: actualiza catalogo
       - stock_actual: crea movimiento de ajuste por delta
-      - ultima_fecha: edita la fecha del ultimo movimiento
-      - ultima_modificacion_tipo: ajusta signo/tipo del ultimo movimiento
+      - ultima_fecha: guarda override visual sin tocar movimientos historicos
+      - ultima_modificacion_tipo: guarda override visual sin tocar movimientos historicos
     """
     ensure_inventory_schema(db_path)
 
@@ -1048,18 +1066,27 @@ def update_stock_cell(
                 "delta": delta,
             }
 
-        # 3) Fecha de la ultima modificacion
+        # 3) Fecha de la ultima modificacion (override visual, no historico)
         if col == "ultima_fecha":
-            new_fecha = _parse_date_iso_strict(new_value)
-            if not new_fecha:
+            raw = _normalize_text(new_value)
+            new_override = _parse_date_iso_strict(raw) if raw else None
+            if raw and not new_override:
                 return {
                     "ok": False,
                     "error": "Fecha invalida. Usa formato YYYY-MM-DD (o DD/MM/YYYY).",
                 }
 
+            cat = con.execute(
+                """
+                SELECT codigo, ultima_fecha_override
+                FROM inventario_catalogo
+                WHERE codigo = ?
+                """,
+                (codigo_norm,),
+            ).fetchone()
             last_mov = con.execute(
                 """
-                SELECT id, fecha
+                SELECT fecha
                 FROM inventario_movimientos
                 WHERE codigo = ?
                 ORDER BY fecha DESC, id DESC
@@ -1067,42 +1094,80 @@ def update_stock_cell(
                 """,
                 (codigo_norm,),
             ).fetchone()
-            if last_mov is None:
-                return {"ok": False, "error": "No hay movimientos para este codigo."}
 
-            before = _normalize_text(last_mov["fecha"])
-            con.execute(
-                "UPDATE inventario_movimientos SET fecha = ? WHERE id = ?",
-                (new_fecha, int(last_mov["id"])),
-            )
-            con.commit()
+            old_override = _parse_date_iso_strict(cat["ultima_fecha_override"]) if cat else None
+            last_date = _normalize_text(last_mov["fecha"]) if last_mov else ""
+            before = old_override or last_date
+            after = new_override or last_date
+
+            if old_override == new_override:
+                return {
+                    "ok": True,
+                    "action": "last_date_update",
+                    "codigo": codigo_norm,
+                    "before": before,
+                    "after": after,
+                    "no_change": True,
+                    "history_preserved": True,
+                }
+
+            if cat is None and new_override is not None:
+                con.execute(
+                    """
+                    INSERT INTO inventario_catalogo
+                    (codigo, descripcion_estandar, unidad_base, categoria, tipo, ocurrencias, variaciones, activo, fuente, updated_at)
+                    VALUES (?, '', '', '', '', 0, 'NO', 1, 'MANUAL_EDICION_CELDA', datetime('now'))
+                    """,
+                    (codigo_norm,),
+                )
+
+            if cat is not None or new_override is not None:
+                con.execute(
+                    """
+                    UPDATE inventario_catalogo
+                    SET ultima_fecha_override = ?,
+                        updated_at = datetime('now')
+                    WHERE codigo = ?
+                    """,
+                    (new_override if new_override else None, codigo_norm),
+                )
+                con.commit()
+
             return {
                 "ok": True,
                 "action": "last_date_update",
                 "codigo": codigo_norm,
-                "movement_id": int(last_mov["id"]),
                 "before": before,
-                "after": new_fecha,
+                "after": after,
+                "history_preserved": True,
             }
 
-        # 4) Tipo de ultima modificacion (ENTRADA/SALIDA)
+        # 4) Tipo de ultima modificacion (ENTRADA/SALIDA) como override visual
         if col == "ultima_modificacion_tipo":
-            normalized = _normalize_text(new_value).upper()
-            sign_map = {
-                "ENTRADA": 1,
-                "E": 1,
-                "+": 1,
-                "SALIDA": -1,
-                "S": -1,
-                "-": -1,
+            raw = _normalize_text(new_value).upper()
+            type_map = {
+                "ENTRADA": "ENTRADA",
+                "E": "ENTRADA",
+                "+": "ENTRADA",
+                "SALIDA": "SALIDA",
+                "S": "SALIDA",
+                "-": "SALIDA",
             }
-            if normalized not in sign_map:
+            if raw and raw not in type_map:
                 return {"ok": False, "error": "Tipo invalido. Usa ENTRADA o SALIDA."}
+            new_override = type_map.get(raw) if raw else None
 
-            new_sign = sign_map[normalized]
+            cat = con.execute(
+                """
+                SELECT codigo, ultima_tipo_override
+                FROM inventario_catalogo
+                WHERE codigo = ?
+                """,
+                (codigo_norm,),
+            ).fetchone()
             last_mov = con.execute(
                 """
-                SELECT id, signo, tipo_mov, cantidad
+                SELECT signo, tipo_mov
                 FROM inventario_movimientos
                 WHERE codigo = ?
                 ORDER BY fecha DESC, id DESC
@@ -1110,43 +1175,62 @@ def update_stock_cell(
                 """,
                 (codigo_norm,),
             ).fetchone()
-            if last_mov is None:
-                return {"ok": False, "error": "No hay movimientos para este codigo."}
 
-            old_sign = int(last_mov["signo"] or 0)
-            old_tipo = _normalize_text(last_mov["tipo_mov"])
-            if old_sign == new_sign:
+            old_override_raw = _normalize_text(cat["ultima_tipo_override"]).upper() if cat else ""
+            old_override = type_map.get(old_override_raw, old_override_raw or None)
+
+            if last_mov is None:
+                last_type = ""
+            elif int(last_mov["signo"] or 0) == 1:
+                last_type = "ENTRADA"
+            elif int(last_mov["signo"] or 0) == -1:
+                last_type = "SALIDA"
+            else:
+                last_type = _normalize_text(last_mov["tipo_mov"]).upper()
+
+            before = old_override or last_type
+            after = new_override or last_type
+
+            if old_override == new_override:
                 return {
                     "ok": True,
                     "action": "last_type_update",
                     "codigo": codigo_norm,
-                    "movement_id": int(last_mov["id"]),
-                    "before": old_tipo,
-                    "after": old_tipo,
+                    "before": before,
+                    "after": after,
                     "no_change": True,
+                    "history_preserved": True,
                 }
 
-            stock_before = _stock_for_code(con, codigo_norm)
-            new_tipo = "ENTRADA_MANUAL" if new_sign > 0 else "SALIDA_MANUAL"
-            con.execute(
-                """
-                UPDATE inventario_movimientos
-                SET signo = ?, tipo_mov = ?
-                WHERE id = ?
-                """,
-                (new_sign, new_tipo, int(last_mov["id"])),
-            )
-            con.commit()
-            stock_after = _stock_for_code(con, codigo_norm)
+            if cat is None and new_override is not None:
+                con.execute(
+                    """
+                    INSERT INTO inventario_catalogo
+                    (codigo, descripcion_estandar, unidad_base, categoria, tipo, ocurrencias, variaciones, activo, fuente, updated_at)
+                    VALUES (?, '', '', '', '', 0, 'NO', 1, 'MANUAL_EDICION_CELDA', datetime('now'))
+                    """,
+                    (codigo_norm,),
+                )
+
+            if cat is not None or new_override is not None:
+                con.execute(
+                    """
+                    UPDATE inventario_catalogo
+                    SET ultima_tipo_override = ?,
+                        updated_at = datetime('now')
+                    WHERE codigo = ?
+                    """,
+                    (new_override if new_override else None, codigo_norm),
+                )
+                con.commit()
+
             return {
                 "ok": True,
                 "action": "last_type_update",
                 "codigo": codigo_norm,
-                "movement_id": int(last_mov["id"]),
-                "before": old_tipo,
-                "after": new_tipo,
-                "stock_before": stock_before,
-                "stock_after": stock_after,
+                "before": before,
+                "after": after,
+                "history_preserved": True,
             }
 
         return {"ok": False, "error": "Operacion no soportada."}
@@ -1192,8 +1276,10 @@ def get_stock_summary(
                 COALESCE(SUM(CASE WHEN m.signo = 1 THEN m.cantidad ELSE 0 END), 0) AS entradas,
                 COALESCE(SUM(CASE WHEN m.signo = -1 THEN m.cantidad ELSE 0 END), 0) AS salidas,
                 COALESCE(SUM(m.signo * m.cantidad), 0) AS stock_actual,
-                COALESCE(lm.fecha, '') AS ultima_fecha,
+                COALESCE(NULLIF(TRIM(COALESCE(c.ultima_fecha_override, '')), ''), COALESCE(lm.fecha, '')) AS ultima_fecha,
                 CASE
+                    WHEN NULLIF(TRIM(COALESCE(c.ultima_tipo_override, '')), '') IS NOT NULL
+                        THEN UPPER(TRIM(COALESCE(c.ultima_tipo_override, '')))
                     WHEN lm.signo = 1 THEN 'ENTRADA'
                     WHEN lm.signo = -1 THEN 'SALIDA'
                     ELSE COALESCE(lm.tipo_mov, '')
@@ -1222,6 +1308,7 @@ def get_stock_summary(
               )
             GROUP BY
                 b.codigo, c.descripcion_estandar, c.unidad_base, c.categoria, c.tipo,
+                c.ultima_fecha_override, c.ultima_tipo_override,
                 lm.fecha, lm.signo, lm.tipo_mov
             ORDER BY c.categoria, c.tipo, b.codigo
             LIMIT ?
