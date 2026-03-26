@@ -63,6 +63,7 @@ def create_applications_tab(parent):
 
     products_by_display: dict[str, dict] = {}
     products_by_code: dict[str, dict] = {}
+    all_product_values: list[str] = []
     draft_products: list[dict[str, Any]] = []
     calendar_cells: list[dict[str, Any]] = []
     action_buttons: list[ttk.Button] = []
@@ -189,7 +190,7 @@ def create_applications_tab(parent):
     # --- Right panel: calendar + management ---
     top = ttk.Frame(right)
     top.grid(row=0, column=0, sticky="ew", pady=(0, 6))
-    top.columnconfigure(2, weight=1)
+    top.columnconfigure(9, weight=1)
 
     btn_prev_month = ttk.Button(top, text="<")
     lbl_month = ttk.Label(top, text="", font=("Segoe UI", 10, "bold"))
@@ -214,6 +215,11 @@ def create_applications_tab(parent):
 
     btn_refresh = ttk.Button(top, text="Refrescar")
     btn_refresh.grid(row=0, column=6)
+
+    jump_date_var = tk.StringVar(value=today.isoformat())
+    ttk.Label(top, text="Buscar fecha:").grid(row=0, column=7, padx=(10, 4))
+    btn_jump_date = ttk.Button(top, text="Mini calendario")
+    btn_jump_date.grid(row=0, column=8)
 
     day_headers = ("LUN", "MAR", "MIE", "JUE", "VIE", "SAB", "DOM")
     cal_grid = tk.Frame(right, bg="#E4E4E4", bd=1, relief="solid")
@@ -313,6 +319,7 @@ def create_applications_tab(parent):
             btn_next_month,
             btn_today,
             btn_refresh,
+            btn_jump_date,
             btn_execute,
             btn_edit,
             btn_cancel,
@@ -340,6 +347,51 @@ def create_applications_tab(parent):
         if "|" in value:
             return value.split("|", 1)[0].strip()
         return value
+
+    def _filtered_product_values(query: str) -> list[str]:
+        needle = (query or "").strip().upper()
+        if not needle:
+            return list(all_product_values)
+        return [label for label in all_product_values if needle in label.upper()]
+
+    def _post_combobox(widget: ttk.Combobox) -> None:
+        try:
+            widget.tk.call("ttk::combobox::Post", str(widget))
+        except Exception:
+            try:
+                widget.event_generate("<Down>")
+            except Exception:
+                return
+        try:
+            widget.focus_set()
+            widget.icursor(tk.END)
+        except Exception:
+            pass
+
+    def _unpost_combobox(widget: ttk.Combobox) -> None:
+        try:
+            widget.tk.call("ttk::combobox::Unpost", str(widget))
+        except Exception:
+            pass
+
+    def _apply_product_filter(_event=None) -> None:
+        typed = (combo_product.get() or "").strip()
+        query = "" if typed in all_product_values else typed
+        filtered = _filtered_product_values(query)
+        combo_product["values"] = filtered
+        if _event is not None:
+            if filtered:
+                frame.after_idle(lambda: _post_combobox(combo_product))
+            else:
+                frame.after_idle(lambda: _unpost_combobox(combo_product))
+
+    def _reset_product_filter(_event=None) -> None:
+        typed = (combo_product.get() or "").strip()
+        query = "" if typed in all_product_values else typed
+        if query:
+            combo_product["values"] = _filtered_product_values(query)
+            return
+        combo_product["values"] = list(all_product_values)
 
     def _active_filter_status() -> str:
         raw = (filter_status_var.get() or "").strip().upper()
@@ -426,6 +478,7 @@ def create_applications_tab(parent):
             return
         selected_date_var.set(iso)
         form_date_var.set(iso)
+        jump_date_var.set(iso)
         _paint_selected_date()
         refresh_applications_list()
 
@@ -512,9 +565,40 @@ def create_applications_tab(parent):
         selected_real_product_var = tk.StringVar(value="")
         combo_real_product = ttk.Combobox(editor, textvariable=selected_real_product_var, width=34)
         combo_real_product.grid(row=0, column=1, padx=(4, 8), sticky="w")
-        combo_real_product["values"] = list(combo_product["values"] or [])
+        real_product_values = list(all_product_values)
+        combo_real_product["values"] = list(real_product_values)
         if combo_real_product["values"]:
             selected_real_product_var.set(str(combo_real_product["values"][0]))
+
+        def _filtered_real_product_values(query: str) -> list[str]:
+            needle = (query or "").strip().upper()
+            if not needle:
+                return list(real_product_values)
+            return [label for label in real_product_values if needle in label.upper()]
+
+        def _apply_real_product_filter(_event=None) -> None:
+            typed = (combo_real_product.get() or "").strip()
+            query = "" if typed in real_product_values else typed
+            filtered = _filtered_real_product_values(query)
+            combo_real_product["values"] = filtered
+            if _event is not None:
+                if filtered:
+                    dialog.after_idle(lambda: _post_combobox(combo_real_product))
+                else:
+                    dialog.after_idle(lambda: _unpost_combobox(combo_real_product))
+
+        def _reset_real_product_filter(_event=None) -> None:
+            typed = (combo_real_product.get() or "").strip()
+            query = "" if typed in real_product_values else typed
+            if query:
+                combo_real_product["values"] = _filtered_real_product_values(query)
+                return
+            combo_real_product["values"] = list(real_product_values)
+
+        combo_real_product.configure(postcommand=lambda: _apply_real_product_filter())
+        combo_real_product.bind("<KeyRelease>", _apply_real_product_filter)
+        combo_real_product.bind("<Button-1>", _reset_real_product_filter)
+        combo_real_product.bind("<FocusIn>", _reset_real_product_filter)
 
         ttk.Label(editor, text="Cant:").grid(row=0, column=2, sticky="w")
         real_qty_var = tk.StringVar(value="")
@@ -636,6 +720,8 @@ def create_applications_tab(parent):
             db = _db_path()
             products = INV.list_catalog_products(db)
         except Exception as e:
+            all_product_values[:] = []
+            combo_product["values"] = []
             _set_status(f"[WARN] No se pudo cargar catalogo: {e}")
             return
 
@@ -653,9 +739,10 @@ def create_applications_tab(parent):
             products_by_code[code] = p
             values.append(label)
 
-        combo_product["values"] = values
-        if not selected_product_var.get() and values:
-            selected_product_var.set(values[0])
+        all_product_values[:] = values
+        combo_product["values"] = list(all_product_values)
+        if not selected_product_var.get() and all_product_values:
+            selected_product_var.set(all_product_values[0])
 
     def add_product_to_draft() -> None:
         code = _extract_code(selected_product_var.get())
@@ -833,6 +920,18 @@ def create_applications_tab(parent):
 
         _paint_selected_date()
 
+    def _go_to_iso(target_iso: str) -> None:
+        parsed = _parse_date_iso(target_iso)
+        if not parsed:
+            return
+        current_year["value"] = int(parsed[:4])
+        current_month["value"] = int(parsed[5:7])
+        selected_date_var.set(parsed)
+        form_date_var.set(parsed)
+        jump_date_var.set(parsed)
+        refresh_calendar()
+        refresh_applications_list()
+
     def _change_month(delta: int) -> None:
         y = current_year["value"]
         m = current_month["value"] + delta
@@ -842,21 +941,171 @@ def create_applications_tab(parent):
         elif m > 12:
             m = 1
             y += 1
-        current_year["value"] = y
-        current_month["value"] = m
-        selected_date_var.set(f"{y:04d}-{m:02d}-01")
-        form_date_var.set(selected_date_var.get())
-        refresh_calendar()
-        refresh_applications_list()
+        _go_to_iso(f"{y:04d}-{m:02d}-01")
+
+    def open_date_picker() -> None:
+        base_iso = _parse_date_iso(selected_date_var.get()) or date.today().isoformat()
+        try:
+            base_date = datetime.strptime(base_iso, "%Y-%m-%d").date()
+        except Exception:
+            base_date = date.today()
+            base_iso = base_date.isoformat()
+
+        dialog = tk.Toplevel(frame)
+        dialog.title("Mini calendario")
+        dialog.geometry("320x300")
+        dialog.resizable(False, False)
+        dialog.configure(bg="#FFFEFF")
+        dialog.transient(frame.winfo_toplevel())
+        dialog.grab_set()
+
+        picker_selected = {"iso": base_iso}
+        picker_year_var = tk.IntVar(value=base_date.year)
+        month_options = [f"{idx:02d} - {month_names[idx]}" for idx in range(1, 13)]
+        picker_month_var = tk.StringVar(value=month_options[base_date.month - 1])
+
+        toolbar = ttk.Frame(dialog, padding=8)
+        toolbar.pack(fill="x")
+
+        days_frame = tk.Frame(dialog, bg="#E4E4E4", bd=1, relief="solid")
+        days_frame.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+        for col in range(7):
+            days_frame.columnconfigure(col, weight=1)
+        for row in range(7):
+            days_frame.rowconfigure(row, weight=1)
+
+        def _safe_picker_year() -> int:
+            try:
+                y = int(str(picker_year_var.get()).strip())
+            except Exception:
+                y = base_date.year
+            y = max(1900, min(2100, y))
+            picker_year_var.set(y)
+            return y
+
+        def _safe_picker_month() -> int:
+            raw = (picker_month_var.get() or "").strip()
+            try:
+                m = int(raw[:2])
+            except Exception:
+                m = base_date.month
+            if m < 1 or m > 12:
+                m = base_date.month
+            return m
+
+        def _set_picker_year_month(y: int, m: int) -> None:
+            while m <= 0:
+                y -= 1
+                m += 12
+            while m > 12:
+                y += 1
+                m -= 12
+            y = max(1900, min(2100, y))
+            picker_year_var.set(y)
+            picker_month_var.set(month_options[m - 1])
+
+        def _pick_day(iso_value: str) -> None:
+            picker_selected["iso"] = iso_value
+            _go_to_iso(iso_value)
+            dialog.destroy()
+
+        def _render_picker_days() -> None:
+            for child in days_frame.winfo_children():
+                child.destroy()
+
+            year = _safe_picker_year()
+            month = _safe_picker_month()
+
+            for idx, day_name in enumerate(day_headers):
+                tk.Label(
+                    days_frame,
+                    text=day_name,
+                    bg="#F0F0F0",
+                    fg="#2A2A2A",
+                    font=("Segoe UI", 8, "bold"),
+                    bd=1,
+                    relief="solid",
+                    padx=2,
+                    pady=2,
+                ).grid(row=0, column=idx, sticky="nsew")
+
+            cal = calendar.Calendar(firstweekday=0)
+            weeks = cal.monthdayscalendar(year, month)
+            while len(weeks) < 6:
+                weeks.append([0, 0, 0, 0, 0, 0, 0])
+
+            for r, week in enumerate(weeks, start=1):
+                for c, day_num in enumerate(week):
+                    if day_num <= 0:
+                        tk.Label(
+                            days_frame,
+                            text="",
+                            bg="#F5F5F5",
+                            fg="#B0B0B0",
+                            bd=1,
+                            relief="solid",
+                        ).grid(row=r, column=c, sticky="nsew")
+                        continue
+
+                    iso_value = f"{year:04d}-{month:02d}-{day_num:02d}"
+                    is_selected = iso_value == picker_selected.get("iso")
+                    tk.Button(
+                        days_frame,
+                        text=str(day_num),
+                        bd=1,
+                        relief="solid",
+                        bg="#DCEEFF" if is_selected else "#FFFFFF",
+                        fg="#0A3D62" if is_selected else "#202020",
+                        activebackground="#CDE2F7",
+                        activeforeground="#0A3D62",
+                        cursor="hand2",
+                        command=lambda chosen_iso=iso_value: _pick_day(chosen_iso),
+                    ).grid(row=r, column=c, sticky="nsew")
+
+        def _shift_picker_month(delta: int) -> None:
+            y = _safe_picker_year()
+            m = _safe_picker_month() + delta
+            _set_picker_year_month(y, m)
+            _render_picker_days()
+
+        ttk.Button(toolbar, text="<", width=3, command=lambda: _shift_picker_month(-1)).grid(
+            row=0, column=0, padx=(0, 4)
+        )
+        ttk.Button(toolbar, text=">", width=3, command=lambda: _shift_picker_month(1)).grid(
+            row=0, column=1, padx=(0, 8)
+        )
+        ttk.Label(toolbar, text="Ano:").grid(row=0, column=2, sticky="w")
+        year_spin = ttk.Spinbox(toolbar, from_=1990, to=2100, textvariable=picker_year_var, width=7)
+        year_spin.grid(row=0, column=3, padx=(4, 8))
+        ttk.Label(toolbar, text="Mes:").grid(row=0, column=4, sticky="w")
+        month_combo = ttk.Combobox(
+            toolbar,
+            textvariable=picker_month_var,
+            values=month_options,
+            state="readonly",
+            width=14,
+        )
+        month_combo.grid(row=0, column=5, padx=(4, 0))
+
+        footer = ttk.Frame(dialog, padding=(8, 0, 8, 8))
+        footer.pack(fill="x")
+
+        def _pick_today() -> None:
+            _go_to_iso(date.today().isoformat())
+            dialog.destroy()
+
+        ttk.Button(footer, text="Ir a hoy", command=_pick_today).pack(side="left")
+        ttk.Button(footer, text="Cerrar", command=dialog.destroy).pack(side="right")
+
+        month_combo.bind("<<ComboboxSelected>>", lambda _e: _render_picker_days())
+        year_spin.bind("<Return>", lambda _e: _render_picker_days())
+        year_spin.bind("<FocusOut>", lambda _e: _render_picker_days())
+        dialog.bind("<Escape>", lambda _e: dialog.destroy())
+
+        _render_picker_days()
 
     def go_today() -> None:
-        now = date.today()
-        current_year["value"] = now.year
-        current_month["value"] = now.month
-        selected_date_var.set(now.isoformat())
-        form_date_var.set(now.isoformat())
-        refresh_calendar()
-        refresh_applications_list()
+        _go_to_iso(date.today().isoformat())
 
     def _selected_application_id() -> int:
         selected = apps_tree.selection()
@@ -990,6 +1239,7 @@ def create_applications_tab(parent):
             current_month["value"] = int(fecha_prog[5:7])
             selected_date_var.set(fecha_prog)
             form_date_var.set(fecha_prog)
+            jump_date_var.set(fecha_prog)
             refresh_calendar()
             refresh_applications_list()
             if edit_app_id > 0:
@@ -1122,6 +1372,7 @@ def create_applications_tab(parent):
     btn_prev_month.configure(command=lambda: _change_month(-1))
     btn_next_month.configure(command=lambda: _change_month(1))
     btn_today.configure(command=go_today)
+    btn_jump_date.configure(command=open_date_picker)
     btn_refresh.configure(command=refresh_all)
     btn_execute.configure(command=execute_selected_application)
     btn_edit.configure(command=edit_selected_application)
@@ -1129,6 +1380,10 @@ def create_applications_tab(parent):
     btn_new.configure(command=start_new_application_mode)
 
     combo_filter_status.bind("<<ComboboxSelected>>", lambda _e: (refresh_calendar(), refresh_applications_list()))
+    combo_product.configure(postcommand=lambda: _apply_product_filter())
+    combo_product.bind("<KeyRelease>", _apply_product_filter)
+    combo_product.bind("<Button-1>", _reset_product_filter)
+    combo_product.bind("<FocusIn>", _reset_product_filter)
     apps_tree.bind("<<TreeviewSelect>>", on_application_selected)
     apps_tree.bind("<Double-1>", lambda _e: edit_selected_application())
 
