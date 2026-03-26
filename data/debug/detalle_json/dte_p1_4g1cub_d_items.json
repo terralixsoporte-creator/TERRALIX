@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-95450",
+      "detalle": "TELEXAMID 500 SC X 1 LT",
+      "cantidad": 10.0,
+      "unidad": "LT",
+      "precio_unitario": 98860.0,
+      "monto_item": 988600.0
+    }
+  ],
+  "source": "openai"
+}

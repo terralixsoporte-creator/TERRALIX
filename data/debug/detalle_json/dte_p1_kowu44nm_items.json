@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-0693",
+      "detalle": "STREPTO PLUS x 1 kg",
+      "cantidad": 5.0,
+      "unidad": "KG",
+      "precio_unitario": 70904.0,
+      "monto_item": 354524.0
+    }
+  ],
+  "source": "openai"
+}

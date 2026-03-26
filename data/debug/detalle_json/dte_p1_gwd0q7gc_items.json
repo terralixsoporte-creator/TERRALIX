@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-27227",
+      "detalle": "ANTIPARRA QUIMICA CLASSIC CLAR",
+      "cantidad": 1.0,
+      "unidad": "CU",
+      "precio_unitario": 4550.0,
+      "monto_item": 4550.0
+    },
+    {
+      "codigo": "NE-16030",
+      "detalle": "GUANTE SOLDADOR DESCARNE ROJO",
+      "cantidad": 1.0,
+      "unidad": "PR",
+      "precio_unitario": 3448.0,
+      "monto_item": 3448.0
+    }
+  ],
+  "source": "openai"
+}

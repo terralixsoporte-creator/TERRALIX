@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "0400001-LT-0400001-LT/0011-(10L)",
+      "detalle": "ESPIRODICLOFEN 240 SC 10L",
+      "cantidad": 10.0,
+      "unidad": "LT",
+      "precio_unitario": 65383.0,
+      "monto_item": 653832.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

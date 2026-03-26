@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-40417",
+      "detalle": "CORAGEN x 1 lt",
+      "cantidad": 3.0,
+      "unidad": "LT",
+      "precio_unitario": 203604.0,
+      "monto_item": 610813.0
+    }
+  ],
+  "source": "openai"
+}

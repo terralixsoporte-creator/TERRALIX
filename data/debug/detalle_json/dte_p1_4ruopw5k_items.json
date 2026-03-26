@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "2000001-LT-2000001-LT/0006-(20L)",
+      "detalle": "Kemazon 20L",
+      "cantidad": 120.0,
+      "unidad": "LT",
+      "precio_unitario": 3724.0,
+      "monto_item": 446892.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

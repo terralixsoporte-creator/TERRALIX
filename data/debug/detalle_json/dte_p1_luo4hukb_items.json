@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-82830",
+      "detalle": "ALTIVO 500 SC x 1 lt",
+      "cantidad": 12.0,
+      "unidad": "LT",
+      "precio_unitario": 79311.0,
+      "monto_item": 951734.0
+    }
+  ],
+  "source": "openai"
+}

@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-56572",
+      "detalle": "ORIUS 43 SC x 5 lt",
+      "cantidad": 5.0,
+      "unidad": "LT",
+      "precio_unitario": 21997.0,
+      "monto_item": 109990.0
+    },
+    {
+      "codigo": "NE-32258",
+      "detalle": "APOLO 25 EW x 5 lt",
+      "cantidad": 5.0,
+      "unidad": "LT",
+      "precio_unitario": 18698.0,
+      "monto_item": 93491.0
+    },
+    {
+      "codigo": "NE-34852",
+      "detalle": "HURRICANE 70 WP x 0,25 kg",
+      "cantidad": 8.0,
+      "unidad": "CU",
+      "precio_unitario": 31785.0,
+      "monto_item": 254280.0
+    }
+  ],
+  "source": "openai"
+}

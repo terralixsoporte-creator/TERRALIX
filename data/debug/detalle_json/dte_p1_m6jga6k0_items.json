@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-25353",
+      "detalle": "FOSFIMAX 40 - 20 x 5 lt",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 7840.0,
+      "monto_item": 156800.0
+    },
+    {
+      "codigo": "NE-25446",
+      "detalle": "FOSFIMAX 40 - 20 x 20 lt",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 6542.0,
+      "monto_item": 130840.0
+    },
+    {
+      "codigo": "NE-25446",
+      "detalle": "FOSFIMAX 40 - 20 x 20 lt",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 6542.0,
+      "monto_item": 130840.0
+    }
+  ],
+  "source": "openai"
+}

@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "INT-20000440",
+      "detalle": "NU-FILM 17 (4 LT) ST",
+      "cantidad": 4.0,
+      "unidad": "L",
+      "precio_unitario": 14464.0,
+      "monto_item": 57858.0
+    },
+    {
+      "codigo": "INT-20001792",
+      "detalle": "CUPROBORDOLES (20 KG) UPL",
+      "cantidad": 20.0,
+      "unidad": "KG",
+      "precio_unitario": 4934.0,
+      "monto_item": 98699.0
+    }
+  ],
+  "source": "openai"
+}

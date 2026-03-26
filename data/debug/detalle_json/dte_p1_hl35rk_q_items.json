@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-38516",
+      "detalle": "RANGO FULL x 20 lt",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 7180.0,
+      "monto_item": 143600.0
+    },
+    {
+      "codigo": "NE-38516",
+      "detalle": "RANGO FULL x 20 lt",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 7180.0,
+      "monto_item": 143600.0
+    }
+  ],
+  "source": "openai"
+}

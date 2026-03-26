@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-27239",
+      "detalle": "GUANTE NITRILO VERDE XL-MERCADERIAS(J)-PROTECCION",
+      "cantidad": 1.0,
+      "unidad": "PR",
+      "precio_unitario": 915.0,
+      "monto_item": 915.0
+    },
+    {
+      "codigo": "NE-16915",
+      "detalle": "RESPIRADOR 1VIA MASPROT M2.1-MERCADERIAS(J)-PROTEC",
+      "cantidad": 1.0,
+      "unidad": "CU",
+      "precio_unitario": 6490.0,
+      "monto_item": 6490.0
+    },
+    {
+      "codigo": "NE-16925",
+      "detalle": "FILTRO MASPROT MIXTO MGVMHE-2-MERCADERIAS(J)-PROTE",
+      "cantidad": 1.0,
+      "unidad": "CU",
+      "precio_unitario": 5833.0,
+      "monto_item": 5833.0
+    },
+    {
+      "codigo": "NE-33893",
+      "detalle": "LENTE SPY CLAROS-MERCADERIAS(J)-PROTECCION PERSONA",
+      "cantidad": 1.0,
+      "unidad": "CU",
+      "precio_unitario": 899.0,
+      "monto_item": 899.0
+    }
+  ],
+  "source": "openai"
+}

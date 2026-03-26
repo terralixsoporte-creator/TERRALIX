@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "1800015-KG-1800015-KG/0025-(25K)",
+      "detalle": "SULFATO DE POTASIO SOLUBLE 25K",
+      "cantidad": 400.0,
+      "unidad": "KG",
+      "precio_unitario": 460.0,
+      "monto_item": 184000.0
+    }
+  ],
+  "source": "openai"
+}

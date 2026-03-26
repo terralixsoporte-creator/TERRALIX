@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "INT-20000187",
+      "detalle": "COMET (1 LT) BF",
+      "cantidad": 4.0,
+      "unidad": "L",
+      "precio_unitario": 70620.0,
+      "monto_item": 282482.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

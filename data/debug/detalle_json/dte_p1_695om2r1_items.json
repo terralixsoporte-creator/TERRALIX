@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-25446",
+      "detalle": "FOSFIMAX 40 - 20 x 20 lt",
+      "cantidad": 100.0,
+      "unidad": "LT",
+      "precio_unitario": 6541.0,
+      "monto_item": 654161.0
+    }
+  ],
+  "source": "openai"
+}

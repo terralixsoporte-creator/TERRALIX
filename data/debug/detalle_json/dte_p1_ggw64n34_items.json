@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "INT-20001280",
+      "detalle": "AGROCOPPER SP98 (10 KG) BY",
+      "cantidad": 10.0,
+      "unidad": "KG",
+      "precio_unitario": 25852.0,
+      "monto_item": 258528.0
+    },
+    {
+      "codigo": "INT-20001119",
+      "detalle": "NORDOX SUPER 75 WG (25 KG) UPL",
+      "cantidad": 50.0,
+      "unidad": "KG",
+      "precio_unitario": 14649.0,
+      "monto_item": 732496.0
+    }
+  ],
+  "source": "openai"
+}

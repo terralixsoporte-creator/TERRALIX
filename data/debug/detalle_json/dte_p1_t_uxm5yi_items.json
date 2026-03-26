@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-93654",
+      "detalle": "UREA PLUS 25KG SB",
+      "cantidad": 0.95,
+      "unidad": "TM",
+      "precio_unitario": 604800.0,
+      "monto_item": 574560.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

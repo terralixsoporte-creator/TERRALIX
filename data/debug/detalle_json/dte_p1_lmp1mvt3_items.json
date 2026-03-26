@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-80666",
+      "detalle": "ORTHENE 75 SP x 1 kg",
+      "cantidad": 1.0,
+      "unidad": "KG",
+      "precio_unitario": 33212.0,
+      "monto_item": 33212.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

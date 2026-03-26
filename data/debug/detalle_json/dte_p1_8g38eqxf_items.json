@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-23300",
+      "detalle": "NORDOX SUPER 75 WG x 25 kg",
+      "cantidad": 50.0,
+      "unidad": "KG",
+      "precio_unitario": 19605.0,
+      "monto_item": 980279.0
+    }
+  ],
+  "source": "openai"
+}

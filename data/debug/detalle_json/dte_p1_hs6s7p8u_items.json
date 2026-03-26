@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-96918",
+      "detalle": "GOAL 2 EC x 5 LT (SUMMIT-AGRO)",
+      "cantidad": 5.0,
+      "unidad": "LT",
+      "precio_unitario": 17113.0,
+      "monto_item": 85569.0
+    }
+  ],
+  "source": "openai"
+}

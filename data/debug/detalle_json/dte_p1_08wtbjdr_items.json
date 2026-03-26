@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "-",
+      "detalle": "APLICACION DE HERBICIDA",
+      "cantidad": 11.0,
+      "unidad": "HAS",
+      "precio_unitario": 30000.0,
+      "monto_item": 330000.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

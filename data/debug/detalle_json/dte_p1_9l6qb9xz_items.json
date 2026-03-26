@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "INT-20001256",
+      "detalle": "MILBEKNOCK (1 LT) SUMMIT AGRO",
+      "cantidad": 3.0,
+      "unidad": "L",
+      "precio_unitario": 103851.0,
+      "monto_item": 311555.0
+    },
+    {
+      "codigo": "INT-20001727",
+      "detalle": "EXPLICIT 30 WG (0,51 KG) FMC",
+      "cantidad": 1.53,
+      "unidad": "KG",
+      "precio_unitario": 123823.0,
+      "monto_item": 189450.0
+    }
+  ],
+  "source": "openai"
+}

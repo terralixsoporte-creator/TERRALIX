@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-93761",
+      "detalle": "CIANAMIDA 50% x 20 lt",
+      "cantidad": 220.0,
+      "unidad": "LT",
+      "precio_unitario": 4936.0,
+      "monto_item": 1085943.0
+    },
+    {
+      "codigo": "NE-105120",
+      "detalle": "MAGNO 50 WP X 0,1 KG",
+      "cantidad": 33.0,
+      "unidad": "CU",
+      "precio_unitario": 23975.0,
+      "monto_item": 791187.0
+    },
+    {
+      "codigo": "NE-96833",
+      "detalle": "RIPPER FULL SL X 20 LT",
+      "cantidad": 40.0,
+      "unidad": "LT",
+      "precio_unitario": 5077.0,
+      "monto_item": 203085.0
+    }
+  ],
+  "source": "openai"
+}

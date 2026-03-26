@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-79116",
+      "detalle": "CITOGROWER x 10 lt-FITOSANITARIOS(A)-NV - BIOESTIM",
+      "cantidad": 30.0,
+      "unidad": "LT",
+      "precio_unitario": 30617.0,
+      "monto_item": 918516.0
+    },
+    {
+      "codigo": "NE-100175",
+      "detalle": "TATIO 325 SC X 1 LT-FITOSANITARIOS(A)-AQ - FUNGICI",
+      "cantidad": 5.0,
+      "unidad": "LT",
+      "precio_unitario": 76542.0,
+      "monto_item": 382714.0
+    },
+    {
+      "codigo": "NE-100175",
+      "detalle": "TATIO 325 SC X 1 LT-FITOSANITARIOS(A)-AQ - FUNGICI",
+      "cantidad": 2.0,
+      "unidad": "LT",
+      "precio_unitario": 76542.0,
+      "monto_item": 153086.0
+    },
+    {
+      "codigo": "NE-104543",
+      "detalle": "KELPURA X 20 LT-FITOSANITARIOS(A)-NV - BIOESTIMULA",
+      "cantidad": 80.0,
+      "unidad": "LT",
+      "precio_unitario": 6932.0,
+      "monto_item": 554568.0
+    }
+  ],
+  "source": "openai"
+}

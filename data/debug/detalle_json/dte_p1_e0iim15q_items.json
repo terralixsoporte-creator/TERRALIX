@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-15969",
+      "detalle": "AMARRA VINA AMARILLA 1CM MAR",
+      "cantidad": 10.0,
+      "unidad": "KG",
+      "precio_unitario": 3100.0,
+      "monto_item": 31000.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

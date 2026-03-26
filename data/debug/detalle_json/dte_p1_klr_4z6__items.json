@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-55655",
+      "detalle": "PARAQUAT 276 SL x 20 lt",
+      "cantidad": 60.0,
+      "unidad": "LT",
+      "precio_unitario": 4500.0,
+      "monto_item": 270000.0
+    },
+    {
+      "codigo": "NE-34852",
+      "detalle": "HURRICANE 70 WP x 0,25 kg",
+      "cantidad": 4.0,
+      "unidad": "CU",
+      "precio_unitario": 36000.0,
+      "monto_item": 144000.0
+    }
+  ],
+  "source": "openai"
+}

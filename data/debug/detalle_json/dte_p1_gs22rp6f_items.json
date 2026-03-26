@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-0145",
+      "detalle": "WINSPRAY x 205 lt",
+      "cantidad": 205.0,
+      "unidad": "LT",
+      "precio_unitario": 2362.0,
+      "monto_item": 484395.0
+    },
+    {
+      "codigo": "NE-92143",
+      "detalle": "PODASTIK MAX x 15 lt",
+      "cantidad": 45.0,
+      "unidad": "LT",
+      "precio_unitario": 3184.0,
+      "monto_item": 143315.0
+    },
+    {
+      "codigo": "NE-101147",
+      "detalle": "NITRATO CALCIO SOL STD 25K SB",
+      "cantidad": 0.45,
+      "unidad": "TM",
+      "precio_unitario": 627297.0,
+      "monto_item": 282284.0
+    }
+  ],
+  "source": "openai"
+}

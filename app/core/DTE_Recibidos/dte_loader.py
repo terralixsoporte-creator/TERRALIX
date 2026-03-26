@@ -142,6 +142,7 @@ detalle = Table(
     Column("linea", Integer),
     Column("codigo", String),
     Column("descripcion", String),
+    Column("unidad", String),
     Column("cantidad", Float),
     Column("precio_unitario", Float),
     Column("impuesto_adicional", Float),
@@ -418,6 +419,93 @@ def clean_giro(raw: str) -> str:
     s = _strip_accents_keep_enie_to_n(s)
     return s
 
+
+def clean_descripcion_detalle(raw: str) -> str:
+    """
+    Normaliza descripcion de lineas de detalle para guardar en DB:
+    - MAYUSCULAS
+    - sin tildes (y ñ->N)
+    - espacios compactados
+    - caracteres raros eliminados
+    """
+    s = _collapse_spaces(str(raw or ""))
+    s = _remove_ocr_artifacts(s)
+    s = _strip_accents_keep_enie_to_n(s)
+    s = s.upper()
+    # Conserva texto util para descripcion de productos.
+    s = re.sub(r"[^A-Z0-9\s\.\,\-\+\%\(\)\/\&:_]", " ", s)
+    s = _collapse_spaces(s)
+    return s
+
+
+def _normalizar_unidad(raw: str) -> str:
+    s = _collapse_spaces(str(raw or "")).upper().strip()
+    if not s:
+        return ""
+    s = re.sub(r"[^A-Z0-9]", "", s)
+    if not s:
+        return ""
+
+    aliases = {
+        "KG": "KG",
+        "KGS": "KG",
+        "KILO": "KG",
+        "KILOS": "KG",
+        "GR": "GR",
+        "GRM": "GR",
+        "GRS": "GR",
+        "GRAMO": "GR",
+        "GRAMOS": "GR",
+        "LT": "LT",
+        "LTS": "LT",
+        "LITRO": "LT",
+        "LITROS": "LT",
+        "L": "LT",
+        "ML": "ML",
+        "CC": "CC",
+        "UN": "UN",
+        "UND": "UN",
+        "UNID": "UN",
+        "UNIDAD": "UN",
+        "UNIDADES": "UN",
+    }
+    return aliases.get(s, s if len(s) <= 8 else "")
+
+
+def _unidad_desde_descripcion(descripcion_normalizada: str) -> str:
+    """
+    Regla de negocio: si la descripcion contiene unidad, esa unidad manda.
+    Se evalua sobre descripcion ya normalizada (MAYUSCULA, sin tildes).
+    """
+    d = _collapse_spaces(str(descripcion_normalizada or "")).upper()
+    if not d:
+        return ""
+
+    checks = [
+        (r"\b(KG|KGS|KILO|KILOS)\b", "KG"),
+        (r"\b(LT|LTS|LITRO|LITROS)\b", "LT"),
+        (r"\b(GR|GRM|GRS|GRAMO|GRAMOS)\b", "GR"),
+        (r"\bML\b", "ML"),
+        (r"\bCC\b", "CC"),
+        (r"\b(UN|UND|UNID|UNIDAD|UNIDADES)\b", "UN"),
+    ]
+    for pattern, unidad in checks:
+        if re.search(pattern, d):
+            return unidad
+    return ""
+
+
+def resolver_unidad_detalle(descripcion_normalizada: str, unidad_origen: str) -> str:
+    """
+    Prioridad:
+    1) Unidad detectada en descripcion (manda)
+    2) Unidad de origen entregada por extractor
+    """
+    from_desc = _unidad_desde_descripcion(descripcion_normalizada)
+    if from_desc:
+        return from_desc
+    return _normalizar_unidad(unidad_origen)
+
 # Asegura columnas nuevas
 # compatibilidad con DBs antiguas (si ya existe una DB)
 add_column_if_missing(engine, "documentos", "ADD COLUMN fecha_emision DATE")
@@ -432,6 +520,7 @@ add_column_if_missing(engine, "documentos", "ADD COLUMN detalle_link TEXT")
 
 # âœ… nuevas columnas del detalle
 add_column_if_missing(engine, "detalle", "ADD COLUMN codigo TEXT")
+add_column_if_missing(engine, "detalle", "ADD COLUMN unidad TEXT")
 add_column_if_missing(engine, "detalle", "ADD COLUMN categoria TEXT")
 add_column_if_missing(engine, "detalle", "ADD COLUMN subcategoria TEXT")
 add_column_if_missing(engine, "detalle", "ADD COLUMN tipo_gasto TEXT")
@@ -504,12 +593,16 @@ def _insertar_items_detalle(conn, doc_id: str, items: list[dict]):
     for idx, it in enumerate(items, start=1):
         codigo_raw = it.get("codigo", "")
         codigo_txt = str(codigo_raw).strip() if codigo_raw is not None else ""
+        unidad_raw = it.get("unidad", "")
+        desc_txt = clean_descripcion_detalle(it.get("detalle", it.get("descripcion", "")))
+        unidad_txt = resolver_unidad_detalle(desc_txt, str(unidad_raw).strip() if unidad_raw is not None else "")
         row = {
             "id_det": f"{doc_id}:{idx}",
             "id_doc": doc_id,
             "linea": idx,
             "codigo": codigo_txt,
-            "descripcion": _collapse_spaces(str(it.get("detalle", it.get("descripcion", "")))),
+            "descripcion": desc_txt,
+            "unidad": unidad_txt,
             "cantidad": (it.get("cantidad", 0)),
             "precio_unitario": (it.get("precio_unitario", 0)),
             "impuesto_adicional": (it.get("impuesto_adicional", 0)),

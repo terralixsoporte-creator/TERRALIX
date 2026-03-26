@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-97772",
+      "detalle": "VITAZYME X 5 LT-FITOSANITARIOS(A)-NV - BIOESTIMULA",
+      "cantidad": 15.0,
+      "unidad": "LT",
+      "precio_unitario": 45430.0,
+      "monto_item": 681463.0
+    },
+    {
+      "codigo": "NE-42232",
+      "detalle": "BASFOLIAR KELP x 20 lt-FITOSANITARIOS(A)-NV - BIOE",
+      "cantidad": 60.0,
+      "unidad": "LT",
+      "precio_unitario": 8236.0,
+      "monto_item": 494204.0
+    }
+  ],
+  "source": "openai"
+}

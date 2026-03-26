@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "0400001-KG-0400001-KG/0045-(5K)",
+      "detalle": "HIDROXICOBRE 35 WG 5K",
+      "cantidad": 50.0,
+      "precio_unitario": 6380.0,
+      "monto_item": 319048.0,
+      "unidad": "UN",
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

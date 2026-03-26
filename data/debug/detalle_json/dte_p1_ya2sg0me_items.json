@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-100416",
+      "detalle": "KANEMITE 15 SC X 1 LT",
+      "cantidad": 7.0,
+      "unidad": "LT",
+      "precio_unitario": 82613.0,
+      "monto_item": 578293.0
+    }
+  ],
+  "source": "openai"
+}

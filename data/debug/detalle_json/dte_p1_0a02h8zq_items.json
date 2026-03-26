@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-85662",
+      "detalle": "FRONTAL 425 SC x 1 lt",
+      "cantidad": 12.0,
+      "unidad": "LT",
+      "precio_unitario": 76369.0,
+      "monto_item": 916431.0
+    },
+    {
+      "codigo": "NE-85662",
+      "detalle": "FRONTAL 425 SC x 1 lt",
+      "cantidad": 6.0,
+      "unidad": "LT",
+      "precio_unitario": 76369.0,
+      "monto_item": 458216.0
+    }
+  ],
+  "source": "openai"
+}

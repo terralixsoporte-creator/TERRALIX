@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-88040",
+      "detalle": "PARAQUAT 27,6 SL X 20 LT",
+      "cantidad": 100.0,
+      "unidad": "LT",
+      "precio_unitario": 13927.0,
+      "monto_item": 1392729.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

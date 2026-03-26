@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-92025",
+      "detalle": "NUTRI K PLUS x 15 lt",
+      "cantidad": 45.0,
+      "unidad": "LT",
+      "precio_unitario": 4688.0,
+      "monto_item": 210980.0
+    },
+    {
+      "codigo": "NE-92025",
+      "detalle": "NUTRI K PLUS x 15 lt",
+      "cantidad": 15.0,
+      "unidad": "LT",
+      "precio_unitario": 4688.0,
+      "monto_item": 70327.0
+    }
+  ],
+  "source": "openai"
+}

@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "-",
+      "detalle": "FIJACION DE LINEAS DE RIEGO EN CEREZOS",
+      "cantidad": 1.0,
+      "unidad": "UNID",
+      "precio_unitario": 600000.0,
+      "monto_item": 600000.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

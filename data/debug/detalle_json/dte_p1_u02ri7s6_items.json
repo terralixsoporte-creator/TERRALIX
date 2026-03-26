@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-97620",
+      "detalle": "DROPPER X 0,250 LT-FITOSANITARIOS(A)-AQ - FITORREG",
+      "cantidad": 14.0,
+      "precio_unitario": 167380.0,
+      "monto_item": 2343327.0
+    }
+  ],
+  "source": "openai"
+}

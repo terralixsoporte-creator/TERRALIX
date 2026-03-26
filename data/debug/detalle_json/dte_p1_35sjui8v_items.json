@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-92025",
+      "detalle": "NUTRI K PLUS x 15 lt",
+      "cantidad": 30.0,
+      "unidad": "LT",
+      "precio_unitario": 4707.0,
+      "monto_item": 141226.0
+    },
+    {
+      "codigo": "NE-92025",
+      "detalle": "NUTRI K PLUS x 15 lt",
+      "cantidad": 30.0,
+      "unidad": "LT",
+      "precio_unitario": 4707.0,
+      "monto_item": 141226.0
+    },
+    {
+      "codigo": "NE-56572",
+      "detalle": "ORIUS 43 SC x 5 lt",
+      "cantidad": 5.0,
+      "unidad": "LT",
+      "precio_unitario": 21567.0,
+      "monto_item": 107840.0
+    },
+    {
+      "codigo": "NE-85662",
+      "detalle": "FRONTAL 425 SC x 1 lt",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 84181.0,
+      "monto_item": 1683621.0
+    }
+  ],
+  "source": "openai"
+}

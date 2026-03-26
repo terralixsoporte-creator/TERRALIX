@@ -1,0 +1,34 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "INT1-PG6026",
+      "detalle": "POSTE GALV 60X60X1,5X2600 EMPOTR REMACHE",
+      "cantidad": 5.0,
+      "precio_unitario": 12162.0,
+      "monto_item": 60810.0
+    },
+    {
+      "codigo": "INT1-90766",
+      "detalle": "ACMAFOR URBANA 2,4 X 2,5BEZINAL 4,2MM",
+      "cantidad": 3.0,
+      "precio_unitario": 27990.0,
+      "monto_item": 83970.0
+    },
+    {
+      "codigo": "INT1-27860",
+      "detalle": "FIJACION DOBLE GALVANIZADA REMACHE D5MM",
+      "cantidad": 25.0,
+      "precio_unitario": 308.0,
+      "monto_item": 7700.0
+    },
+    {
+      "codigo": "INT1-30024",
+      "detalle": "REMACHE A.INOX 4.8X21 ALA 16MM",
+      "cantidad": 25.0,
+      "precio_unitario": 182.0,
+      "monto_item": 4550.0
+    }
+  ],
+  "source": "openai"
+}

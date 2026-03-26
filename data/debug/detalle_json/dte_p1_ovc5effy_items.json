@@ -1,0 +1,46 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "3000001-LT-3000001-LT/0029(20L)",
+      "detalle": "QUETION CA 20L",
+      "cantidad": 80.0,
+      "unidad": "LT",
+      "precio_unitario": 2866.0,
+      "monto_item": 229318.0
+    },
+    {
+      "codigo": "3000001-LT-3000001-LT/0010-(20L)",
+      "detalle": "QUETION B 20L",
+      "cantidad": 40.0,
+      "unidad": "LT",
+      "precio_unitario": 3203.0,
+      "monto_item": 128148.0
+    },
+    {
+      "codigo": "3000001-LT-3000001-LT/0028(20L)",
+      "detalle": "QUETION MG 20L",
+      "cantidad": 120.0,
+      "unidad": "LT",
+      "precio_unitario": 2950.0,
+      "monto_item": 354094.0
+    },
+    {
+      "codigo": "3000001-LT-3000001-LT/0016-(10L)",
+      "detalle": "QUETION CU 10L",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 12646.0,
+      "monto_item": 252924.0
+    },
+    {
+      "codigo": "3000001-LT-3000001-LT/0019-(20L)",
+      "detalle": "QUETION ZN 20L",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 2866.0,
+      "monto_item": 57329.0
+    }
+  ],
+  "source": "openai"
+}

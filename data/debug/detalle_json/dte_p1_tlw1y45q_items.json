@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-87894",
+      "detalle": "VP FILTER x 5 lt",
+      "cantidad": 40.0,
+      "unidad": "LT",
+      "precio_unitario": 21448.0,
+      "monto_item": 857947.0
+    },
+    {
+      "codigo": "NE-87894",
+      "detalle": "VP FILTER x 5 lt",
+      "cantidad": 5.0,
+      "unidad": "LT",
+      "precio_unitario": 21448.0,
+      "monto_item": 107243.0
+    },
+    {
+      "codigo": "NE-91894",
+      "detalle": "KONAN 240 SC x 1 lt",
+      "cantidad": 7.0,
+      "unidad": "LT",
+      "precio_unitario": 62396.0,
+      "monto_item": 436773.0
+    }
+  ],
+  "source": "openai"
+}

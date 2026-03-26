@@ -1,0 +1,78 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-79095",
+      "detalle": "ACTIVOL 4% x 5 lt",
+      "cantidad": 5.0,
+      "unidad": "LT",
+      "precio_unitario": 13302.0,
+      "monto_item": 66514.0
+    },
+    {
+      "codigo": "NE-33800",
+      "detalle": "DEFENDER MAGNESIO x 20 lt",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 4070.0,
+      "monto_item": 81410.0
+    },
+    {
+      "codigo": "NE-89649",
+      "detalle": "DEFENDER NITROGENO x 20 LT",
+      "cantidad": 40.0,
+      "unidad": "LT",
+      "precio_unitario": 4330.0,
+      "monto_item": 173213.0
+    },
+    {
+      "codigo": "NE-1550",
+      "detalle": "DEFENDER ZINC x 5 lt",
+      "cantidad": 5.0,
+      "unidad": "LT",
+      "precio_unitario": 5817.0,
+      "monto_item": 29085.0
+    },
+    {
+      "codigo": "NE-34852",
+      "detalle": "HURRICANE 70 WP x 0,25 kg",
+      "cantidad": 4.0,
+      "unidad": "CU",
+      "precio_unitario": 36374.0,
+      "monto_item": 145499.0
+    },
+    {
+      "codigo": "NE-0150",
+      "detalle": "ZERO 5 EC x 1 lt",
+      "cantidad": 6.0,
+      "unidad": "LT",
+      "precio_unitario": 29446.0,
+      "monto_item": 176677.0
+    },
+    {
+      "codigo": "NE-87486",
+      "detalle": "ACIDO FOSFORICO 85% 25KG SB",
+      "cantidad": 0.025,
+      "unidad": "TM",
+      "precio_unitario": 860160.0,
+      "monto_item": 21504.0
+    },
+    {
+      "codigo": "NE-41398",
+      "detalle": "BOTA GOMA SEGUSA F/AZUL 42",
+      "cantidad": 1.0,
+      "unidad": "PR",
+      "precio_unitario": 14314.0,
+      "monto_item": 14314.0
+    },
+    {
+      "codigo": "NE-38825",
+      "detalle": "BOTIN NAZCA IND. NT 300 N? 40",
+      "cantidad": 1.0,
+      "unidad": "PR",
+      "precio_unitario": 23538.0,
+      "monto_item": 23539.0
+    }
+  ],
+  "source": "openai"
+}

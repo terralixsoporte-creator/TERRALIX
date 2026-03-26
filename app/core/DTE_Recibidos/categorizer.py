@@ -1594,6 +1594,7 @@ def main() -> None:
     con = connect_db(DB_PATH)
 
     add_column_if_missing_sqlite(con, "detalle", "codigo TEXT")
+    add_column_if_missing_sqlite(con, "detalle", "unidad TEXT")
     add_column_if_missing_sqlite(con, "detalle", "needs_review INTEGER")
     add_column_if_missing_sqlite(con, "detalle", "categoria TEXT")
     add_column_if_missing_sqlite(con, "detalle", "subcategoria TEXT")

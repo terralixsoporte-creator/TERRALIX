@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-34437",
+      "detalle": "REGLONE x 5 lt",
+      "cantidad": 80.0,
+      "unidad": "LT",
+      "precio_unitario": 13118.0,
+      "monto_item": 1049501.0
+    }
+  ],
+  "source": "openai"
+}

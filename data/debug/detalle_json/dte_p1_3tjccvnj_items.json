@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "-",
+      "detalle": "PINTURA DE TRONCOS CEREZO",
+      "cantidad": 9.7,
+      "unidad": "HAS",
+      "precio_unitario": 35000.0,
+      "monto_item": 339500.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

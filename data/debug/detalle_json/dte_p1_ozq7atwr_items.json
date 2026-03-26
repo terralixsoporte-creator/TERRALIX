@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-85833",
+      "detalle": "UREA GRANULADA 25KG SB",
+      "cantidad": 0.375,
+      "unidad": "TM",
+      "precio_unitario": 602952.0,
+      "monto_item": 226107.0
+    },
+    {
+      "codigo": "NE-85941",
+      "detalle": "MURIATO POTASIO 60% 25KG SB",
+      "cantidad": 0.25,
+      "unidad": "TM",
+      "precio_unitario": 488880.0,
+      "monto_item": 122220.0
+    }
+  ],
+  "source": "openai"
+}

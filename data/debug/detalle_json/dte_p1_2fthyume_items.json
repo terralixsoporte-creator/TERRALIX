@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-92990",
+      "detalle": "EXIREL x 1 lt",
+      "cantidad": 13.0,
+      "unidad": "LT",
+      "precio_unitario": 70902.0,
+      "monto_item": 921731.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

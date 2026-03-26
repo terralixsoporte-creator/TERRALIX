@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-85460",
+      "detalle": "CONSUL 65 WP x 20 Kg",
+      "cantidad": 20.0,
+      "unidad": "KG",
+      "precio_unitario": 12595.0,
+      "monto_item": 251908.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

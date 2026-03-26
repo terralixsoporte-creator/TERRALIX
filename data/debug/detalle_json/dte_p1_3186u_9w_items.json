@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "0400001-LT-0400001-LT/0029-(20L)",
+      "detalle": "PARAQUAT 27 SL 20L",
+      "cantidad": 60.0,
+      "unidad": "LT",
+      "precio_unitario": 3944.0,
+      "monto_item": 236689.0
+    }
+  ],
+  "source": "openai"
+}

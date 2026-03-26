@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-105121",
+      "detalle": "PILOT X 1 LT-FITOSANITARIOS(A)-AQ - FUNGICIDA",
+      "cantidad": 6.0,
+      "unidad": "LT",
+      "precio_unitario": 80024.0,
+      "monto_item": 480147.0
+    },
+    {
+      "codigo": "NE-63667",
+      "detalle": "DELICO 100 EC x 1 lt-FITOSANITARIOS(A)-AQ - INSECT",
+      "cantidad": 13.0,
+      "unidad": "LT",
+      "precio_unitario": 42422.0,
+      "monto_item": 551494.0
+    }
+  ],
+  "source": "openai"
+}

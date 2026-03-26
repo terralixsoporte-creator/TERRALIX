@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-37417",
+      "detalle": "DEMAND 2.5 CS x 1 LT",
+      "cantidad": 1.0,
+      "unidad": "LT",
+      "precio_unitario": 41106.0,
+      "monto_item": 41106.0
+    }
+  ],
+  "source": "openai"
+}

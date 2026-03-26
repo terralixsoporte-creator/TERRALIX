@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "3000001-LT-3000001-LT/0028(20L)",
+      "detalle": "QUETION MG 20L",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 3755.0,
+      "monto_item": 75111.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-84663",
+      "detalle": "COLLAR PP 63mm x 1\" REFORZAD",
+      "cantidad": 1.0,
+      "unidad": "CU",
+      "precio_unitario": 3600.0,
+      "monto_item": 3600.0
+    }
+  ],
+  "source": "openai"
+}

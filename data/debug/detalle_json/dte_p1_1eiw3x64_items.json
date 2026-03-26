@@ -1,0 +1,46 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-34852",
+      "detalle": "HURRICANE 70 WP x 0,25 kg",
+      "cantidad": 3.0,
+      "unidad": "CU",
+      "precio_unitario": 22497.0,
+      "monto_item": 67491.0
+    },
+    {
+      "codigo": "NE-34852",
+      "detalle": "HURRICANE 70 WP x 0,25 kg",
+      "cantidad": 9.0,
+      "unidad": "CU",
+      "precio_unitario": 22497.0,
+      "monto_item": 202474.0
+    },
+    {
+      "codigo": "NE-92025",
+      "detalle": "NUTRI K PLUS x 15 lt",
+      "cantidad": 105.0,
+      "unidad": "LT",
+      "precio_unitario": 3576.0,
+      "monto_item": 375579.0
+    },
+    {
+      "codigo": "NE-92026",
+      "detalle": "NUTRI MG PLUS x 15 lt",
+      "cantidad": 75.0,
+      "unidad": "LT",
+      "precio_unitario": 3576.0,
+      "monto_item": 268271.0
+    },
+    {
+      "codigo": "NE-92024",
+      "detalle": "NUTRI ZN PLUS x 15 lt",
+      "cantidad": 30.0,
+      "unidad": "LT",
+      "precio_unitario": 3576.0,
+      "monto_item": 107308.0
+    }
+  ],
+  "source": "openai"
+}

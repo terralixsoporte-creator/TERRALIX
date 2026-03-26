@@ -1,0 +1,46 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-96991",
+      "detalle": "DRAKKAR X 5 LT",
+      "cantidad": 15.0,
+      "unidad": "LT",
+      "precio_unitario": 11577.0,
+      "monto_item": 173663.0
+    },
+    {
+      "codigo": "NE-33416",
+      "detalle": "SPECTRO 33 EC x 10 lt",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 11051.0,
+      "monto_item": 221026.0
+    },
+    {
+      "codigo": "NE-38381",
+      "detalle": "PANZER GOLD x 20 lt",
+      "cantidad": 40.0,
+      "unidad": "LT",
+      "precio_unitario": 11577.0,
+      "monto_item": 463102.0
+    },
+    {
+      "codigo": "NE-96918",
+      "detalle": "GOAL 2 EC x 5 LT (SUMMIT-AGRO)",
+      "cantidad": 10.0,
+      "unidad": "LT",
+      "precio_unitario": 21050.0,
+      "monto_item": 210501.0
+    },
+    {
+      "codigo": "NE-31723",
+      "detalle": "TANGO 24 EC x 1 lt",
+      "cantidad": 1.0,
+      "unidad": "LT",
+      "precio_unitario": 21896.0,
+      "monto_item": 21897.0
+    }
+  ],
+  "source": "openai"
+}

@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-32826",
+      "detalle": "APOLO 25 EW x 1 lt",
+      "cantidad": 1.0,
+      "unidad": "LT",
+      "precio_unitario": 18887.0,
+      "monto_item": 18887.0
+    },
+    {
+      "codigo": "NE-0693",
+      "detalle": "STREPTO PLUS x 1 kg",
+      "cantidad": 1.0,
+      "unidad": "KG",
+      "precio_unitario": 59570.0,
+      "monto_item": 59570.0
+    },
+    {
+      "codigo": "NE-55655",
+      "detalle": "PARAQUAT 276 SL x 20 lt",
+      "cantidad": 40.0,
+      "unidad": "LT",
+      "precio_unitario": 4445.0,
+      "monto_item": 177822.0
+    },
+    {
+      "codigo": "NE-4585",
+      "detalle": "PULVERIZ MATABI SUPER AGRO 16",
+      "cantidad": 1.0,
+      "unidad": "CU",
+      "precio_unitario": 57333.0,
+      "monto_item": 57334.0
+    }
+  ],
+  "source": "openai"
+}

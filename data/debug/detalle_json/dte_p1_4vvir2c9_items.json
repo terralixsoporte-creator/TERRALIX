@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-95604",
+      "detalle": "ACRAMITE 48 SC X 1 LT",
+      "cantidad": 16.0,
+      "unidad": "LT",
+      "precio_unitario": 90417.0,
+      "monto_item": 1446683.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

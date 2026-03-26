@@ -172,7 +172,7 @@ def create_update_tab(parent):
         print(
             """
 Iniciando actualizacion de base de datos.
-Secuencia: 1) Descarga SII -> 2) Lectura IA -> 3) Categorizacion -> 4) Backfill codigos
+Secuencia: 1) Descarga SII -> 2) Lectura IA -> 3) Categorizacion -> 4) Backfill codigos -> 5) Backfill unidades (debug local) -> 6) Sync inventario automatico
 No cierres esta ventana hasta que termine.
 """
         )
@@ -326,7 +326,7 @@ No cierres esta ventana hasta que termine.
         def run_ai_reader_batch(ruta_pdf: str, db_path: str):
             from app.core.DTE_Recibidos import ai_reader as AIR
 
-            print("\n[2/4] Iniciando lectura IA de PDFs...\n")
+            print("\n[2/6] Iniciando lectura IA de PDFs...\n")
             targets = AIR._collect_target_files(file_arg=None, dir_arg=ruta_pdf)
             if not targets:
                 print("No se encontraron PDFs para procesar con IA.")
@@ -416,7 +416,7 @@ No cierres esta ventana hasta que termine.
 
             gui_batch_sleep = max(0.0, _env_float("GUI_REVIEW_BATCH_SLEEP", 0.05))
             CAT.BATCH_SLEEP = gui_batch_sleep
-            print(f"\n[3/4] Iniciando categorizacion contable (batch_sleep={gui_batch_sleep:.2f}s)...\n")
+            print(f"\n[3/6] Iniciando categorizacion contable (batch_sleep={gui_batch_sleep:.2f}s)...\n")
             try:
                 CAT.main()
             except SystemExit as e:
@@ -428,7 +428,7 @@ No cierres esta ventana hasta que termine.
         def run_codigo_backfill_insumos(ruta_pdf: str, db_path: str):
             from app.core.DTE_Recibidos import ai_reader as AIR
 
-            print("[4/4] Releyendo PDFs para completar columna 'codigo' en INSUMOS_AGRICOLAS...\n")
+            print("[4/6] Releyendo PDFs para completar columna 'codigo' en INSUMOS_AGRICOLAS...\n")
             result = AIR.backfill_missing_codigo_from_pdfs(
                 db_path=db_path,
                 pdf_dir=ruta_pdf,
@@ -447,6 +447,54 @@ No cierres esta ventana hasta que termine.
                 f"filas_actualizadas={result.get('n_filas_codigo_actualizadas', 0)}\n"
             )
 
+        def run_unidad_backfill_debug(db_path: str):
+            from app.core.DTE_Recibidos import ai_reader as AIR
+
+            print("[5/6] Backfill local de 'unidad' desde JSON debug (sin API)...\n")
+            result = AIR.backfill_missing_unidad_from_debug(
+                db_path=db_path,
+                categoria_objetivo="INSUMOS_AGRICOLAS",
+                debug_dir=None,
+                verbose=True,
+            )
+            if not result.get("ok"):
+                raise RuntimeError(f"backfill unidad debug fallo: {result.get('error', 'error_desconocido')}")
+
+            print(
+                "[OK] Backfill unidad debug terminado: "
+                f"debug_files={result.get('n_debug_files', 0)} | "
+                f"docs_objetivo={result.get('n_docs_objetivo', 0)} | "
+                f"docs_con_match={result.get('n_docs_con_match_debug', 0)} | "
+                f"docs_sin_match={result.get('n_docs_sin_match_debug', 0)} | "
+                f"filas_actualizadas={result.get('n_filas_unidad_actualizadas', 0)}\n"
+            )
+
+        def run_inventory_autosync(db_path: str):
+            from app.core.DTE_Recibidos import inventory as INV
+
+            print("[6/6] Sincronizando inventario teorico (automatico, sin filtro INSUMOS_AGRICOLAS, ignora codigo='-')...\n")
+            result = INV.sync_entries_from_detalle(
+                db_path=db_path,
+                only_categoria=None,
+            )
+            if not result.get("ok"):
+                print(f"[WARN] No se pudo sincronizar inventario automaticamente: {result.get('error', 'error_desconocido')}\n")
+                return
+
+            stats = result.get("catalog_stats", {}) or {}
+            purge = result.get("purge_ignored_codes", {}) or {}
+            print(
+                "[OK] Inventario sincronizado: "
+                f"filas_detalle={result.get('rows_scanned', 0)} | "
+                f"mov_ins={result.get('movements_inserted', 0)} | "
+                f"mov_upd={result.get('movements_updated', 0)} | "
+                f"cat_ins={result.get('catalog_inserted', 0)} | "
+                f"cat_upd={result.get('catalog_updated', 0)} | "
+                f"stats_upd={stats.get('catalog_updated_stats', 0)} | "
+                f"variaciones_si={stats.get('codes_variaciones_si', 0)} | "
+                f"purge_cod_ignorado(cat={purge.get('catalog_deleted', 0)}, mov={purge.get('movements_deleted', 0)})\n"
+            )
+
         def ejecutar_pipeline(ruta_pdf: str, db_path: str):
             from app.core.DTE_Recibidos.pipeline_guard import (
                 acquire_pipeline_lock,
@@ -462,7 +510,7 @@ No cierres esta ventana hasta que termine.
 
                 from app.core.DTE_Recibidos.Scrap import scrapear
 
-                print("[1/3] Iniciando descarga desde SII...\n")
+                print("[1/6] Iniciando descarga desde SII...\n")
 
                 def dl_cb(done: int | None, total: int | None, info: str = ""):
                     set_download_progress(done, total, info)
@@ -478,6 +526,8 @@ No cierres esta ventana hasta que termine.
                 run_ai_reader_batch(ruta_pdf, db_path)
                 run_categorizer_batch()
                 run_codigo_backfill_insumos(ruta_pdf, db_path)
+                run_unidad_backfill_debug(db_path)
+                run_inventory_autosync(db_path)
                 reporte_path = _generar_reporte_sin_clasificar(db_path)
                 if reporte_path:
                     print(f"[OK] Reporte de sin clasificar generado: {reporte_path}")
@@ -613,6 +663,46 @@ No cierres esta ventana hasta que termine.
             sys.stdout = original_stdout
             return
 
+        allow_non_category_updates = False
+        try:
+            from app.core.DTE_Recibidos.excel_sync import preview_non_category_edits
+
+            preview = preview_non_category_edits(excel_path, DB_PATH, max_examples=8)
+            if not preview.get("ok"):
+                print(f"[WARN] No se pudo previsualizar cambios fuera de categoria: {preview.get('error', 'error')}")
+            else:
+                n_rows_other = int(preview.get("n_rows_with_changes", 0) or 0)
+                n_fields_other = int(preview.get("n_fields_changed", 0) or 0)
+                if n_rows_other > 0:
+                    print(
+                        f"[IMPORT] Se detectaron cambios fuera de categoria en "
+                        f"{n_rows_other} fila(s) y {n_fields_other} campo(s)."
+                    )
+                    for ex in preview.get("examples", [])[:5]:
+                        chs = ex.get("changes", [])
+                        resumen = ", ".join(
+                            f"{c.get('columna')}: '{c.get('anterior', '')}' -> '{c.get('nuevo', '')}'"
+                            for c in chs[:3]
+                        )
+                        if len(chs) > 3:
+                            resumen += f", ... (+{len(chs)-3})"
+                        print(f"  - {ex.get('id_det', '(sin id_det)')}: {resumen}")
+
+                    allow_non_category_updates = messagebox.askyesno(
+                        "Confirmar cambios fuera de categoria",
+                        "Se detectaron cambios en columnas distintas de "
+                        "categoria/subcategoria/tipo_gasto.\n\n"
+                        "¿Quieres aplicar esos nuevos valores en la base de datos?",
+                    )
+                    if allow_non_category_updates:
+                        print("[IMPORT] Confirmado: se aplicaran cambios fuera de categoria.")
+                    else:
+                        print("[IMPORT] Se ignoraran cambios fuera de categoria; solo se importaran categorias.")
+                else:
+                    print("[IMPORT] No se detectaron cambios fuera de categoria.")
+        except Exception as e:
+            print(f"[WARN] No se pudo evaluar cambios fuera de categoria: {e}")
+
         def _do_import():
             from app.core.DTE_Recibidos.excel_sync import sync_and_retrain
 
@@ -620,23 +710,46 @@ No cierres esta ventana hasta que termine.
                 print(f"[IMPORT] Leyendo: {excel_path}")
                 print("[IMPORT] Detectando cambios...\n")
 
-                result = sync_and_retrain(excel_path, DB_PATH)
+                result = sync_and_retrain(
+                    excel_path,
+                    DB_PATH,
+                    allow_non_category_updates=allow_non_category_updates,
+                )
 
                 if not result.get("ok"):
                     print(f"[ERROR] {result.get('error', 'Error desconocido')}")
                     return
 
-                n = result["n_changed"]
-                if n == 0:
+                n = int(result.get("n_changed", 0) or 0)
+                n_other_applied = int(result.get("n_non_category_applied", 0) or 0)
+                n_other_detected = int(result.get("n_non_category_changed", 0) or 0)
+
+                if n == 0 and n_other_applied == 0:
                     print("[OK] No se detectaron cambios en el Excel.")
-                    print("Las categorias coinciden con la base de datos.")
+                    if n_other_detected > 0 and not allow_non_category_updates:
+                        print(
+                            f"Se detectaron {n_other_detected} fila(s) con cambios fuera de categoria, "
+                            "pero se omitieron por confirmacion del usuario."
+                        )
+                    else:
+                        print("Las categorias coinciden con la base de datos.")
                     return
 
-                print(f"[OK] {n} filas actualizadas en la base de datos:\n")
-                for ch in result.get("changes", [])[:20]:
-                    print(f"  {ch['id_det']}: {ch['categoria']} > {ch['subcategoria']} > {ch['tipo_gasto']}")
-                if n > 20:
-                    print(f"  ... y {n - 20} mas.")
+                if n > 0:
+                    print(f"[OK] {n} filas actualizadas en categorias en la base de datos:\n")
+                    for ch in result.get("changes", [])[:20]:
+                        print(f"  {ch['id_det']}: {ch['categoria']} > {ch['subcategoria']} > {ch['tipo_gasto']}")
+                    if n > 20:
+                        print(f"  ... y {n - 20} mas.")
+
+                if n_other_detected > 0:
+                    if allow_non_category_updates:
+                        print(f"\n[OK] {n_other_applied} fila(s) con cambios fuera de categoria aplicadas.")
+                    else:
+                        print(
+                            f"\n[INFO] Se detectaron {n_other_detected} fila(s) con cambios fuera de categoria, "
+                            "pero no se aplicaron."
+                        )
 
                 for w in result.get("warnings", []):
                     print(f"  [WARN] {w}")
@@ -650,8 +763,10 @@ No cierres esta ventana hasta que termine.
                     if acc:
                         print(f"  Accuracy categorias: {acc:.1%}")
                     print("\n[OK] El modelo ahora aprende de tus correcciones.")
-                else:
+                elif n > 0:
                     print("\n[WARN] No se pudo reentrenar el modelo.")
+                else:
+                    print("\n[INFO] No fue necesario reentrenar el modelo (sin cambios de categoria).")
 
             except Exception as e:
                 print(f"[ERROR] Fallo al importar: {e}")

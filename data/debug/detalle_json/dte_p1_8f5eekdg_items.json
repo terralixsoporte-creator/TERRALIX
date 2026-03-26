@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-95604",
+      "detalle": "ACRAMITE 48 SC X 1 LT-FITOSANITARIOS(A)-AQ - ACARI",
+      "cantidad": 8.0,
+      "unidad": "LT",
+      "precio_unitario": 83572.0,
+      "monto_item": 668582.0
+    },
+    {
+      "codigo": "NE-107546",
+      "detalle": "VP FILTER X 20 LT-FITOSANITARIOS(A)-NV - PROTECTOR",
+      "cantidad": 60.0,
+      "unidad": "LT",
+      "precio_unitario": 13580.0,
+      "monto_item": 814835.0
+    }
+  ],
+  "source": "openai"
+}

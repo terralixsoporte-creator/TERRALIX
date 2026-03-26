@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-41716",
+      "detalle": "DEADLINE PELLET x 500 GRS",
+      "cantidad": 3.0,
+      "unidad": "CU",
+      "precio_unitario": 6200.0,
+      "monto_item": 18600.0
+    }
+  ],
+  "source": "openai"
+}

@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-86565",
+      "detalle": "POLISUL 35 x 208 lt",
+      "cantidad": 208.0,
+      "unidad": "LT",
+      "precio_unitario": 2680.0,
+      "monto_item": 557511.0
+    }
+  ],
+  "source": "openai"
+}

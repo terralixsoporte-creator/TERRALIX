@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "3000001-LT-3000001-LT/0032(5L)",
+      "detalle": "CITOVOLL 5L",
+      "cantidad": 30.0,
+      "unidad": "LT",
+      "precio_unitario": 22230.0,
+      "monto_item": 666908.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

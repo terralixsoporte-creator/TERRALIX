@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-107546",
+      "detalle": "VP FILTER X 20 LT-FITOSANITARIOS(A)-NV - PROTECTOR",
+      "cantidad": 100.0,
+      "unidad": "LT",
+      "precio_unitario": 13810.0,
+      "monto_item": 1381066.0
+    }
+  ],
+  "source": "openai"
+}

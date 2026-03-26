@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-0813",
+      "detalle": "ACABAN 050 SC x 1 lt",
+      "cantidad": 5.0,
+      "unidad": "LT",
+      "precio_unitario": 85608.0,
+      "monto_item": 428045.0
+    }
+  ],
+  "source": "openai"
+}

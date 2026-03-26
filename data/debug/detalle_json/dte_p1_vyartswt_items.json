@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "0500001-LT-0500001-LT/0022(1L)",
+      "detalle": "ZERO 5 EC 1L",
+      "cantidad": 7.0,
+      "unidad": "LT",
+      "precio_unitario": 29367.0,
+      "monto_item": 205573.0
+    },
+    {
+      "codigo": "2100001-GR-2100001-GR/0008-(250gr)",
+      "detalle": "QUILATE 70 WP 250gr",
+      "cantidad": 1.0,
+      "unidad": "GR",
+      "precio_unitario": 112060.0,
+      "monto_item": 112060.0
+    }
+  ],
+  "source": "openai"
+}

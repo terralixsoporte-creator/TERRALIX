@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "3000001-LT-3000001-LT/0019-(20L)",
+      "detalle": "QUETION ZN 20L",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 5333.0,
+      "monto_item": 106671.0
+    },
+    {
+      "codigo": "3000001-LT-3000001-LT/0029(20L)",
+      "detalle": "QUETION CA 20L",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 5241.0,
+      "monto_item": 104832.0
+    }
+  ],
+  "source": "openai"
+}

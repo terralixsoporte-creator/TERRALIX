@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "-",
+      "detalle": "SEMILLA ALFALFA X 20 KLS",
+      "cantidad": 1.0,
+      "unidad": "UN",
+      "precio_unitario": 268908.0,
+      "monto_item": 268908.0
+    },
+    {
+      "codigo": "-",
+      "detalle": "MEZCLA NPK X 25 KLS",
+      "cantidad": 4.0,
+      "unidad": "UN",
+      "precio_unitario": 21849.0,
+      "monto_item": 87396.0
+    }
+  ],
+  "source": "openai"
+}

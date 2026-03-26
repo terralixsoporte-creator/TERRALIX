@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "3200001-LT-3200001-LT/0003(20L)",
+      "detalle": "PARAQUAT 276 SL 20L",
+      "cantidad": 80.0,
+      "unidad": "LT",
+      "precio_unitario": 4662.0,
+      "monto_item": 373005.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

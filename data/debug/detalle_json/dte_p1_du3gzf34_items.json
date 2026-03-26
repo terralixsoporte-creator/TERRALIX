@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-96966",
+      "detalle": "PREMIO SC 12 X 1 LT",
+      "cantidad": 66.0,
+      "unidad": "LT",
+      "precio_unitario": 37819.0,
+      "monto_item": 2496113.0
+    }
+  ],
+  "source": "openai"
+}

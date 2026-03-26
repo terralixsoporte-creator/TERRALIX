@@ -1,0 +1,46 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-92024",
+      "detalle": "NUTRI ZN PLUS x 15 lt-FITOSANITARIOS(A)-NV - CORRE",
+      "cantidad": 30.0,
+      "unidad": "LT",
+      "precio_unitario": 3556.0,
+      "monto_item": 106704.0
+    },
+    {
+      "codigo": "NE-92027",
+      "detalle": "NUTRI CA PLUS x 15 lt-FITOSANITARIOS(A)-NV - CORRE",
+      "cantidad": 15.0,
+      "unidad": "LT",
+      "precio_unitario": 3556.0,
+      "monto_item": 53352.0
+    },
+    {
+      "codigo": "NE-92027",
+      "detalle": "NUTRI CA PLUS x 15 lt-FITOSANITARIOS(A)-NV - CORRE",
+      "cantidad": 75.0,
+      "unidad": "LT",
+      "precio_unitario": 3556.0,
+      "monto_item": 266761.0
+    },
+    {
+      "codigo": "NE-34474",
+      "detalle": "BASFOLIAR K PREMIUM X 20 LT-FITOSANITARIOS(A)-NV -",
+      "cantidad": 40.0,
+      "unidad": "LT",
+      "precio_unitario": 6283.0,
+      "monto_item": 251348.0
+    },
+    {
+      "codigo": "NE-34474",
+      "detalle": "BASFOLIAR K PREMIUM X 20 LT-FITOSANITARIOS(A)-NV -",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 6283.0,
+      "monto_item": 125674.0
+    }
+  ],
+  "source": "openai"
+}

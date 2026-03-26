@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-102486",
+      "detalle": "STONG 480 SC X 1 LT",
+      "cantidad": 2.0,
+      "unidad": "LT",
+      "precio_unitario": 444835.0,
+      "monto_item": 889671.0
+    }
+  ],
+  "source": "openai"
+}

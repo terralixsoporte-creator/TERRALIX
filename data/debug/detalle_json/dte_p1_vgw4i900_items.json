@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-101099",
+      "detalle": "MARTELLO X 10 LT-FITOSANITARIOS(A)-NV - BIOESTIMUL",
+      "cantidad": 70.0,
+      "unidad": "LT",
+      "precio_unitario": 11884.0,
+      "monto_item": 831907.0
+    }
+  ],
+  "source": "openai"
+}

@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-96007",
+      "detalle": "ESCALERA ALUMINIO 2.40 MT IMPO",
+      "cantidad": 8.0,
+      "unidad": "CU",
+      "precio_unitario": 118000.0,
+      "monto_item": 944000.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

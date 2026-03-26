@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-17728",
+      "detalle": "DIFERENCIA DE CAMBIO",
+      "cantidad": 1.0,
+      "precio_unitario": 2350.0,
+      "monto_item": 2350.0,
+      "unidad": "SE",
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

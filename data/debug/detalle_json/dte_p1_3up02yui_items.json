@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-78618",
+      "detalle": "AMINOCUP x 1 lt",
+      "cantidad": 10.0,
+      "unidad": "LT",
+      "precio_unitario": 19759.0,
+      "monto_item": 197600.0
+    },
+    {
+      "codigo": "NE-78618",
+      "detalle": "AMINOCUP x 1 lt",
+      "cantidad": 12.0,
+      "unidad": "LT",
+      "precio_unitario": 19759.0,
+      "monto_item": 237119.0
+    }
+  ],
+  "source": "openai"
+}

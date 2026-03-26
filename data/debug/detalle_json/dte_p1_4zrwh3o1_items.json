@@ -1,0 +1,46 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-100175",
+      "detalle": "TATIO 325 SC X 1 LT",
+      "cantidad": 12.0,
+      "unidad": "LT",
+      "precio_unitario": 54147.0,
+      "monto_item": 649765.0
+    },
+    {
+      "codigo": "NE-92027",
+      "detalle": "NUTRI CA PLUS x 15 lt",
+      "cantidad": 15.0,
+      "unidad": "LT",
+      "precio_unitario": 3594.0,
+      "monto_item": 53914.0
+    },
+    {
+      "codigo": "NE-92027",
+      "detalle": "NUTRI CA PLUS x 15 lt",
+      "cantidad": 30.0,
+      "unidad": "LT",
+      "precio_unitario": 3594.0,
+      "monto_item": 107827.0
+    },
+    {
+      "codigo": "NE-92028",
+      "detalle": "NUTRI BO PLUS x 15 lt",
+      "cantidad": 30.0,
+      "unidad": "LT",
+      "precio_unitario": 3724.0,
+      "monto_item": 111748.0
+    },
+    {
+      "codigo": "NE-79116",
+      "detalle": "CITOGROWER x 10 lt",
+      "cantidad": 10.0,
+      "unidad": "LT",
+      "precio_unitario": 27073.0,
+      "monto_item": 270735.0
+    }
+  ],
+  "source": "openai"
+}

@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-96032",
+      "detalle": "BASFOLIAR MOLIBDENO SL X 5 LT",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 38837.0,
+      "monto_item": 776758.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

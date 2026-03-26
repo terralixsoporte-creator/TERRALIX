@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-25231",
+      "detalle": "DEMON TC 25 x 1LT-MERCADERIAS(J)-SANIDAD AMBIENTAL",
+      "cantidad": 2.0,
+      "unidad": "LT",
+      "precio_unitario": 41276.0,
+      "monto_item": 82553.0
+    }
+  ],
+  "source": "openai"
+}

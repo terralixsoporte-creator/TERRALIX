@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-96833",
+      "detalle": "RIPPER FULL SL X 20 LT",
+      "cantidad": 80.0,
+      "unidad": "LT",
+      "precio_unitario": 7488.0,
+      "monto_item": 599102.0
+    }
+  ],
+  "source": "openai"
+}

@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "INT-20001669",
+      "detalle": "RIPPER FULL (20 LT) UPL",
+      "cantidad": 40.0,
+      "unidad": "L",
+      "precio_unitario": 6507.0,
+      "monto_item": 260301.0
+    },
+    {
+      "codigo": "INT-20000684",
+      "detalle": "VALOR 50 WP (100 GRS) ST",
+      "cantidad": 4.5,
+      "unidad": "KG",
+      "precio_unitario": 231830.0,
+      "monto_item": 1043237.0
+    }
+  ],
+  "source": "openai"
+}

@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-92360",
+      "detalle": "POLY BO x 10 lt-FITOSANITARIOS(A)-NV - CORRECTOR N",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 3409.0,
+      "monto_item": 68189.0
+    },
+    {
+      "codigo": "NE-92358",
+      "detalle": "POLY CA x 10 lt-FITOSANITARIOS(A)-NV - CORRECTOR N",
+      "cantidad": 110.0,
+      "unidad": "LT",
+      "precio_unitario": 3409.0,
+      "monto_item": 375040.0
+    },
+    {
+      "codigo": "NE-92358",
+      "detalle": "POLY CA x 10 lt-FITOSANITARIOS(A)-NV - CORRECTOR N",
+      "cantidad": 90.0,
+      "unidad": "LT",
+      "precio_unitario": 3409.0,
+      "monto_item": 306851.0
+    }
+  ],
+  "source": "openai"
+}

@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-34852",
+      "detalle": "HURRICANE 70 WP x 0,25 kg-FITOSANITARIOS(A)-AQ - I",
+      "cantidad": 6.0,
+      "unidad": "CU",
+      "precio_unitario": 20071.0,
+      "monto_item": 120427.0
+    },
+    {
+      "codigo": "NE-34852",
+      "detalle": "HURRICANE 70 WP x 0,25 kg-FITOSANITARIOS(A)-AQ - I",
+      "cantidad": 6.0,
+      "unidad": "CU",
+      "precio_unitario": 20071.0,
+      "monto_item": 120427.0
+    },
+    {
+      "codigo": "NE-90096",
+      "detalle": "BIOFRUT x 0,6 kg-FITOSANITARIOS(A)-NV - BIOESTIMUL",
+      "cantidad": 9.0,
+      "unidad": "CU",
+      "precio_unitario": 75866.0,
+      "monto_item": 682802.0
+    }
+  ],
+  "source": "openai"
+}

@@ -1,0 +1,62 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-28063",
+      "detalle": "GIBERPLUS 2.0 x 5 lt",
+      "cantidad": 5.0,
+      "unidad": "LT",
+      "precio_unitario": 7983.0,
+      "monto_item": 39915.0
+    },
+    {
+      "codigo": "NE-54685",
+      "detalle": "CAPTAN 80 WG x 5 kg",
+      "cantidad": 5.0,
+      "unidad": "KG",
+      "precio_unitario": 10761.0,
+      "monto_item": 53805.0
+    },
+    {
+      "codigo": "NE-86106",
+      "detalle": "STIMPLEX x 10 lt",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 8938.0,
+      "monto_item": 178760.0
+    },
+    {
+      "codigo": "NE-92025",
+      "detalle": "NUTRI K PLUS x 15 lt",
+      "cantidad": 45.0,
+      "unidad": "LT",
+      "precio_unitario": 4480.0,
+      "monto_item": 201600.0
+    },
+    {
+      "codigo": "NE-92026",
+      "detalle": "NUTRI MG PLUS x 15 lt",
+      "cantidad": 15.0,
+      "unidad": "LT",
+      "precio_unitario": 4030.0,
+      "monto_item": 60450.0
+    },
+    {
+      "codigo": "NE-92026",
+      "detalle": "NUTRI MG PLUS x 15 lt",
+      "cantidad": 15.0,
+      "unidad": "LT",
+      "precio_unitario": 4030.0,
+      "monto_item": 60450.0
+    },
+    {
+      "codigo": "NE-34852",
+      "detalle": "HURRICANE 70 WP x 0,25 kg",
+      "cantidad": 4.0,
+      "unidad": "CU",
+      "precio_unitario": 32000.0,
+      "monto_item": 128000.0
+    }
+  ],
+  "source": "openai"
+}

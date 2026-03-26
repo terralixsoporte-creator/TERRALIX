@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "INT1-1001998",
+      "detalle": "HERBADOX 45 CS 10 L",
+      "cantidad": 20.0,
+      "unidad": "L",
+      "precio_unitario": 12511.0,
+      "monto_item": 250227.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

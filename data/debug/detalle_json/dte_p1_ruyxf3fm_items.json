@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-24339",
+      "detalle": "NEXUS 50 SL x 20 lt",
+      "cantidad": 160.0,
+      "precio_unitario": 6362.0,
+      "monto_item": 1017967.0,
+      "unidad": "LT",
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

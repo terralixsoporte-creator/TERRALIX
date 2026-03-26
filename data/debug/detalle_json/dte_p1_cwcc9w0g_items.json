@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-82830",
+      "detalle": "ALTIVO 500 SC x 1 lt-FITOSANITARIOS(A)-AQ - FUNGIC",
+      "cantidad": 4.0,
+      "unidad": "LT",
+      "precio_unitario": 75077.0,
+      "monto_item": 300310.0
+    },
+    {
+      "codigo": "NE-82830",
+      "detalle": "ALTIVO 500 SC x 1 lt-FITOSANITARIOS(A)-AQ - FUNGIC",
+      "cantidad": 6.0,
+      "unidad": "LT",
+      "precio_unitario": 75077.0,
+      "monto_item": 450465.0
+    }
+  ],
+  "source": "openai"
+}

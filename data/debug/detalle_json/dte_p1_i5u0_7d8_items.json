@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-80046",
+      "detalle": "BULL x 1 lt",
+      "cantidad": 2.0,
+      "unidad": "LT",
+      "precio_unitario": 81050.0,
+      "monto_item": 162101.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

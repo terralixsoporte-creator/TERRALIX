@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-0145",
+      "detalle": "WINSPRAY x 205 lt",
+      "cantidad": 410.0,
+      "unidad": "LT",
+      "precio_unitario": 2164.0,
+      "monto_item": 887316.0
+    }
+  ],
+  "source": "openai"
+}

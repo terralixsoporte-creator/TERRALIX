@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-85833",
+      "detalle": "UREA GRANULADA 25KG SB",
+      "cantidad": 0.6,
+      "unidad": "TM",
+      "precio_unitario": 620450.0,
+      "monto_item": 372270.0
+    }
+  ],
+  "source": "openai"
+}

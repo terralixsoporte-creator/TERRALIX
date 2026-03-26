@@ -188,6 +188,111 @@ def _clean_codigo(value: Any) -> str:
     return code
 
 
+_UNIDAD_SYNONYMS = {
+    "KG": "KG",
+    "KGS": "KG",
+    "KILO": "KG",
+    "KILOS": "KG",
+    "KILOGRAMO": "KG",
+    "KILOGRAMOS": "KG",
+    "GR": "GR",
+    "GRM": "GR",
+    "GRS": "GR",
+    "GRAMO": "GR",
+    "GRAMOS": "GR",
+    "LT": "LT",
+    "LTS": "LT",
+    "LITRO": "LT",
+    "LITROS": "LT",
+    "L": "LT",
+    "ML": "ML",
+    "CC": "CC",
+    "UN": "UN",
+    "UND": "UN",
+    "UNID": "UN",
+    "UNIDAD": "UN",
+    "UNIDADES": "UN",
+    "SACO": "SACO",
+    "SACO.": "SACO",
+    "SACOS": "SACO",
+    "BIDON": "BIDON",
+    "BIDONES": "BIDON",
+    "CAJA": "CAJA",
+    "CAJAS": "CAJA",
+    "BOLSA": "BOLSA",
+    "BOLSAS": "BOLSA",
+}
+
+
+def _clean_unidad(value: Any) -> str:
+    if value is None:
+        return ""
+    u = _strip_accents(str(value or "")).upper().strip()
+    if not u:
+        return ""
+    u = re.sub(r"[^A-Z0-9]", "", u)
+    if not u:
+        return ""
+    if u in _UNIDAD_SYNONYMS:
+        return _UNIDAD_SYNONYMS[u]
+    # Si no está en el catálogo, deja un token corto para no perder información.
+    if len(u) <= 8:
+        return u
+    return ""
+
+
+def _extract_unidad_from_text(text: str) -> str:
+    s = _strip_accents(str(text or "")).upper()
+    if not s:
+        return ""
+    # Busca patrones tipo "10 KG", "2 LT", "30 UND", etc.
+    m = re.search(
+        r"(?:^|[\s(])\d+(?:[.,]\d+)?\s*(KGS?|KILOS?|GR|GRM|GRS?|GRAMOS?|LTS?|LITROS?|ML|CC|UND?|UNIDADES?|SACOS?|BIDONES?|CAJAS?|BOLSAS?)(?:$|[\s).,;:/-])",
+        s,
+    )
+    if m:
+        return _clean_unidad(m.group(1))
+    return ""
+
+
+def _extract_unidad_from_item(item: Dict[str, Any]) -> str:
+    # Regla: si la descripcion contiene unidad, esa referencia manda.
+    desc = str(item.get("detalle") or item.get("descripcion") or "")
+    u_desc = _extract_unidad_from_text(desc)
+    if u_desc:
+        return u_desc
+    cant_raw = item.get("cantidad")
+    u_cant = _extract_unidad_from_text(str(cant_raw or ""))
+    if u_cant:
+        return u_cant
+
+    # Si no hubo señal en descripcion/cantidad, usar campo unidad de origen.
+    for key in ("unidad", "uom", "um", "unidad_medida", "medida"):
+        if key in item:
+            u = _clean_unidad(item.get(key))
+            if u:
+                return u
+    return ""
+
+
+def _norm_match_text(value: Any) -> str:
+    s = _strip_accents(str(value or "")).lower().strip()
+    s = re.sub(r"\s+", " ", s)
+    s = re.sub(r"[^a-z0-9 ]", "", s)
+    return s
+
+
+def _build_items_signature(items: List[Dict[str, Any]]) -> str:
+    parts: List[str] = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        code = _norm_match_text(it.get("codigo", ""))
+        desc = _norm_match_text(it.get("detalle", it.get("descripcion", "")))
+        parts.append(f"{code}|{desc}")
+    return "||".join(parts)
+
+
 def _extract_codigo_from_text(text: str) -> str:
     s = str(text or "").strip()
     if not s:
@@ -255,6 +360,10 @@ def _normalize_item_fields(it: Dict[str, Any]) -> Dict[str, Any]:
     code = _extract_codigo_from_item(out)
     if code:
         out["codigo"] = code
+
+    unidad = _extract_unidad_from_item(out)
+    if unidad:
+        out["unidad"] = unidad
 
     return out
 
@@ -331,6 +440,7 @@ def analizar_detalle_desde_imagen(image_path: str) -> Dict[str, Any]:
         "descuento (si existe), impuesto_adicional (si existe). "
         "Si hay una columna de codigo/SKU/item, copiala textual en 'codigo'. "
         "Si el codigo viene al inicio de la descripcion (por ejemplo 'ABC123 - PRODUCTO'), separalo en 'codigo'. "
+        "Si la unidad no viene en una columna dedicada, infierela desde descripcion/cantidad (ej: KG, LT, UN, SACO). "
         "CRÃTICO - Formato de montos: SIEMPRE usa formato chileno estricto: "
         "- Los montos chilenos son ENTEROS (sin decimales) "
         "- Punto (.) ÃšNICAMENTE como separador de miles: 1.000, 25.000, 350.000 "
@@ -406,16 +516,7 @@ def analizar_detalle_desde_imagen(image_path: str) -> Dict[str, Any]:
             # No bloquear por errores de normalización/coerción; continuar con items originales.
             pass
 
-        # Guardado opcional en JSON de debug para reproducibilidad (solo si estÃ¡ habilitado)
-        if AI_DETALLE_DEBUG:
-            try:
-                os.makedirs(debug_dir, exist_ok=True)
-                with open(debug_json_path, "w", encoding="utf-8") as f:
-                    # Guardar la respuesta completa para mejor trazabilidad durante debug
-                    json.dump(result, f, ensure_ascii=False, indent=2)
-                print(f"Guardado JSON debug: {debug_json_path}")
-            except Exception as e:
-                print(f"No se pudo guardar JSON debug: {e}")
+        # Escritura de JSON debug deshabilitada para evitar generar archivos en disco.
 
         return result
     except Exception:
@@ -1039,6 +1140,188 @@ def backfill_missing_codigo_from_pdfs(
         except Exception:
             pass
 
+
+def _load_debug_items_file(path_json: str) -> List[Dict[str, Any]]:
+    try:
+        with open(path_json, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return []
+
+    raw_items: List[Any] = []
+    if isinstance(data, list):
+        raw_items = data
+    elif isinstance(data, dict):
+        if isinstance(data.get("items"), list):
+            raw_items = data.get("items", [])
+        elif isinstance(data.get("detalle"), list):
+            raw_items = data.get("detalle", [])
+        elif isinstance(data.get("Detalle"), list):
+            raw_items = data.get("Detalle", [])
+
+    items: List[Dict[str, Any]] = []
+    for it in raw_items:
+        if not isinstance(it, dict):
+            continue
+        items.append(_normalize_item_fields(dict(it)))
+    return items
+
+
+def backfill_missing_unidad_from_debug(
+    db_path: Optional[str] = None,
+    *,
+    categoria_objetivo: Optional[str] = "INSUMOS_AGRICOLAS",
+    debug_dir: Optional[str] = None,
+    max_docs: int = 0,
+    verbose: bool = True,
+) -> Dict[str, Any]:
+    """
+    Rellena detalle.unidad usando SOLO JSON debug locales (sin llamadas a API).
+    """
+    db_resolved = db_path or _get_db_path()
+    if not db_resolved or not os.path.isfile(db_resolved):
+        return {"ok": False, "error": f"db_not_found:{db_resolved}"}
+
+    if debug_dir:
+        debug_dir_resolved = debug_dir
+    else:
+        debug_dir_resolved = str((BASE_DIR / "data" / "debug" / "detalle_json").resolve())
+
+    json_files = sorted(glob.glob(os.path.join(debug_dir_resolved, "*_items.json")))
+    if not json_files:
+        return {
+            "ok": True,
+            "debug_dir": debug_dir_resolved,
+            "n_debug_files": 0,
+            "n_docs_objetivo": 0,
+            "n_docs_con_match_debug": 0,
+            "n_docs_sin_match_debug": 0,
+            "n_filas_unidad_actualizadas": 0,
+        }
+
+    # Índice por firma de ítems para matching local sin usar API.
+    debug_by_signature: Dict[str, List[Dict[str, Any]]] = {}
+    n_debug_loaded = 0
+    for fp in json_files:
+        items = _load_debug_items_file(fp)
+        if not items:
+            continue
+        sig = _build_items_signature(items)
+        if not sig:
+            continue
+        if sig not in debug_by_signature:
+            debug_by_signature[sig] = items
+        n_debug_loaded += 1
+
+    con = sqlite3.connect(db_resolved)
+    con.row_factory = sqlite3.Row
+    try:
+        cur = con.cursor()
+        cols = [r[1] for r in cur.execute("PRAGMA table_info(detalle);").fetchall()]
+        if "unidad" not in cols:
+            cur.execute("ALTER TABLE detalle ADD COLUMN unidad TEXT")
+            con.commit()
+            if verbose:
+                print("[MIGRATION] Columna detalle.unidad agregada.")
+
+        where_parts = ["(d.unidad IS NULL OR TRIM(d.unidad) = '')"]
+        params: List[Any] = []
+        if categoria_objetivo and categoria_objetivo.upper() != "ALL":
+            where_parts.append("UPPER(TRIM(COALESCE(d.categoria, ''))) = ?")
+            params.append(categoria_objetivo.strip().upper())
+
+        q_docs = f"""
+            SELECT d.id_doc
+            FROM detalle d
+            WHERE {' AND '.join(where_parts)}
+            GROUP BY d.id_doc
+            ORDER BY d.id_doc
+        """
+        if max_docs and max_docs > 0:
+            q_docs += f" LIMIT {int(max_docs)}"
+
+        docs = [r["id_doc"] for r in cur.execute(q_docs, params).fetchall()]
+        if not docs:
+            return {
+                "ok": True,
+                "debug_dir": debug_dir_resolved,
+                "n_debug_files": n_debug_loaded,
+                "n_docs_objetivo": 0,
+                "n_docs_con_match_debug": 0,
+                "n_docs_sin_match_debug": 0,
+                "n_filas_unidad_actualizadas": 0,
+            }
+
+        n_docs_con_match = 0
+        n_docs_sin_match = 0
+        n_filas_upd = 0
+
+        for i, id_doc in enumerate(docs, start=1):
+            rows = cur.execute(
+                """
+                SELECT linea, COALESCE(codigo, '') AS codigo, COALESCE(descripcion, '') AS descripcion
+                FROM detalle
+                WHERE id_doc = ?
+                ORDER BY linea
+                """,
+                (id_doc,),
+            ).fetchall()
+            doc_items = [{"codigo": r["codigo"], "detalle": r["descripcion"]} for r in rows]
+            sig = _build_items_signature(doc_items)
+            debug_items = debug_by_signature.get(sig)
+
+            if not debug_items:
+                n_docs_sin_match += 1
+                if verbose:
+                    print(f"[BACKFILL-UNIDAD][SKIP] ({i}/{len(docs)}) Sin match debug para {id_doc}")
+                continue
+
+            n_docs_con_match += 1
+            updated_doc = 0
+            desc_by_line = {int(r["linea"]): (r["descripcion"] or "") for r in rows}
+            for linea, it in enumerate(debug_items, start=1):
+                unidad_base = _extract_unidad_from_item(it)
+                unidad = DL.resolver_unidad_detalle(desc_by_line.get(linea, ""), unidad_base)
+                if not unidad:
+                    continue
+                r_upd = cur.execute(
+                    """
+                    UPDATE detalle
+                    SET unidad = ?
+                    WHERE id_doc = ?
+                      AND linea = ?
+                      AND (unidad IS NULL OR TRIM(unidad) = '')
+                    """,
+                    (unidad, id_doc, linea),
+                )
+                if r_upd.rowcount and r_upd.rowcount > 0:
+                    updated_doc += int(r_upd.rowcount)
+
+            if updated_doc > 0:
+                con.commit()
+                n_filas_upd += updated_doc
+                if verbose:
+                    print(f"[BACKFILL-UNIDAD][OK] {id_doc}: {updated_doc} fila(s) actualizada(s).")
+            elif verbose:
+                print(f"[BACKFILL-UNIDAD][INFO] {id_doc}: match debug sin unidades nuevas.")
+
+        return {
+            "ok": True,
+            "debug_dir": debug_dir_resolved,
+            "n_debug_files": n_debug_loaded,
+            "n_docs_objetivo": len(docs),
+            "n_docs_con_match_debug": n_docs_con_match,
+            "n_docs_sin_match_debug": n_docs_sin_match,
+            "n_filas_unidad_actualizadas": n_filas_upd,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
@@ -1052,15 +1335,25 @@ if __name__ == "__main__":
         help="Rellena detalle.codigo releeyendo PDFs para filas con codigo vacio.",
     )
     parser.add_argument(
+        "--backfill-unidad-debug",
+        action="store_true",
+        help="Rellena detalle.unidad desde JSON debug locales (sin API).",
+    )
+    parser.add_argument(
         "--categoria",
         default="INSUMOS_AGRICOLAS",
-        help="Categoria objetivo para --backfill-codigo (usa ALL para sin filtro).",
+        help="Categoria objetivo para --backfill-codigo/--backfill-unidad-debug (usa ALL para sin filtro).",
     )
     parser.add_argument(
         "--max-docs",
         type=int,
         default=0,
-        help="Limite de documentos a procesar en --backfill-codigo (0 = sin limite).",
+        help="Limite de documentos a procesar en backfills (0 = sin limite).",
+    )
+    parser.add_argument(
+        "--debug-dir",
+        default=None,
+        help="Carpeta de JSON debug para --backfill-unidad-debug (default: data/debug/detalle_json).",
     )
     args = parser.parse_args()
 
@@ -1079,6 +1372,17 @@ if __name__ == "__main__":
             debug=args.debug,
         )
         print(f"[BACKFILL-CODIGO] {result}")
+        sys.exit(0 if result.get("ok") else 1)
+
+    if args.backfill_unidad_debug:
+        result = backfill_missing_unidad_from_debug(
+            db_path=db_path,
+            categoria_objetivo=args.categoria,
+            debug_dir=args.debug_dir,
+            max_docs=args.max_docs,
+            verbose=True,
+        )
+        print(f"[BACKFILL-UNIDAD] {result}")
         sys.exit(0 if result.get("ok") else 1)
 
     targets = _collect_target_files(args.file, args.dir)

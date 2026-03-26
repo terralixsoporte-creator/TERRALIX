@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "0500001-LT-0500001-LT/0020(1L)",
+      "detalle": "KONAN 240 SC 1L",
+      "cantidad": 10.0,
+      "unidad": "LT",
+      "precio_unitario": 73737.0,
+      "monto_item": 737372.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "INT-10000788",
+      "detalle": "BACTERADVANCE (0.3 LT) AGROADVANCE",
+      "cantidad": 5.7,
+      "unidad": "L",
+      "precio_unitario": 90998.0,
+      "monto_item": 518694.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

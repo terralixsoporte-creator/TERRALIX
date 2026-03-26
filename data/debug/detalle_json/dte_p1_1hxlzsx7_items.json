@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-90096",
+      "detalle": "BIOFRUT x 0,6 kg",
+      "cantidad": 3.0,
+      "unidad": "CU",
+      "precio_unitario": 79000.0,
+      "monto_item": 237000.0
+    },
+    {
+      "codigo": "NE-56572",
+      "detalle": "ORIUS 43 SC x 5 lt",
+      "cantidad": 5.0,
+      "unidad": "LT",
+      "precio_unitario": 19700.0,
+      "monto_item": 98500.0
+    }
+  ],
+  "source": "openai"
+}

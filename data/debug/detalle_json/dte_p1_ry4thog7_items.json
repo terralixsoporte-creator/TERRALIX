@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-92358",
+      "detalle": "POLY CA x 10 lt-FITOSANITARIOS(A)-NV - CORRECTOR N",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 3964.0,
+      "monto_item": 79291.0
+    }
+  ],
+  "source": "openai"
+}

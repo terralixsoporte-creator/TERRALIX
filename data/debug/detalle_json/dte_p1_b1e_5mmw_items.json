@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "3000001-LT-3000001-LT/0010-(5L)",
+      "detalle": "QUETION VITAMINS 5L",
+      "cantidad": 15.0,
+      "unidad": "LT",
+      "precio_unitario": 23073.0,
+      "monto_item": 346109.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

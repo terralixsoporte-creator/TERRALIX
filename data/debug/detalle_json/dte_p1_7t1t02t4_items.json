@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-36526",
+      "detalle": "ZOBERAMINOL 80 SP x 1 kg-FITOSANITARIOS(A)-NV - BI",
+      "cantidad": 30.0,
+      "unidad": "KG",
+      "precio_unitario": 16812.0,
+      "monto_item": 504371.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

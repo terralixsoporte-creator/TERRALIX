@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-94070",
+      "detalle": "TIFI POLVO X 1 KG",
+      "cantidad": 11.0,
+      "unidad": "KG",
+      "precio_unitario": 73397.0,
+      "monto_item": 807372.0
+    }
+  ],
+  "source": "openai"
+}

@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-92115",
+      "detalle": "KASUMIN 23 SL x 1 lt",
+      "cantidad": 23.0,
+      "unidad": "LT",
+      "precio_unitario": 22787.0,
+      "monto_item": 524118.0
+    },
+    {
+      "codigo": "NE-92115",
+      "detalle": "KASUMIN 23 SL x 1 lt",
+      "cantidad": 12.0,
+      "unidad": "LT",
+      "precio_unitario": 22787.0,
+      "monto_item": 273453.0
+    },
+    {
+      "codigo": "NE-92115",
+      "detalle": "KASUMIN 23 SL x 1 lt",
+      "cantidad": 1.0,
+      "unidad": "LT",
+      "precio_unitario": 22787.0,
+      "monto_item": 22788.0
+    }
+  ],
+  "source": "openai"
+}

@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-732455",
+      "detalle": "NOTA DEBITO X INTERESES",
+      "cantidad": 1.0,
+      "precio_unitario": 34581.0,
+      "monto_item": 34581.0,
+      "unidad": "IT",
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

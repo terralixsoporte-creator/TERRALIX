@@ -1,0 +1,46 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "1800001-KG-1800001-KG/0016-(25K)",
+      "detalle": "NITRITEC 21 25K",
+      "cantidad": 200.0,
+      "unidad": "KG",
+      "precio_unitario": 450.0,
+      "monto_item": 90000.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    },
+    {
+      "codigo": "1800001-KG-1800001-KG/0001-(25K)",
+      "detalle": "ACIDO BORICO 25K",
+      "cantidad": 50.0,
+      "unidad": "KG",
+      "precio_unitario": 600.0,
+      "monto_item": 30000.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    },
+    {
+      "codigo": "1800001-KG-1800001-KG/0023-(25K)",
+      "detalle": "SULFATO DE ZINC 25K",
+      "cantidad": 50.0,
+      "unidad": "KG",
+      "precio_unitario": 650.0,
+      "monto_item": 32500.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    },
+    {
+      "codigo": "1800001-KG-1800001-KG/0002-(25K)",
+      "detalle": "ACIDO FOSFORICO 25K",
+      "cantidad": 100.0,
+      "unidad": "KG",
+      "precio_unitario": 900.0,
+      "monto_item": 90000.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

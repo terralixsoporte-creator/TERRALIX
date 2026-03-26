@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-95858",
+      "detalle": "TRAJE IMPERMEAB ALTO VOL L AYG",
+      "cantidad": 1.0,
+      "unidad": "CU",
+      "precio_unitario": 30778.0,
+      "monto_item": 30779.0
+    },
+    {
+      "codigo": "NE-27238",
+      "detalle": "GUANTE NITRILO VERDE L",
+      "cantidad": 1.0,
+      "unidad": "PR",
+      "precio_unitario": 840.0,
+      "monto_item": 840.0
+    },
+    {
+      "codigo": "NE-39388",
+      "detalle": "BLOQ.SOLAR SAFESUN 50x1 L C/V",
+      "cantidad": 1.0,
+      "unidad": "LT",
+      "precio_unitario": 11591.0,
+      "monto_item": 11592.0
+    }
+  ],
+  "source": "openai"
+}

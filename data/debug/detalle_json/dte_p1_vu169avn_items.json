@@ -1,0 +1,46 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-97620",
+      "detalle": "DROPPER X 0,250 LT",
+      "cantidad": 26.0,
+      "unidad": "CU",
+      "precio_unitario": 157323.0,
+      "monto_item": 4090414.0
+    },
+    {
+      "codigo": "NE-79116",
+      "detalle": "CITOGROWER x 10 lt",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 26350.0,
+      "monto_item": 527015.0
+    },
+    {
+      "codigo": "NE-92025",
+      "detalle": "NUTRI K PLUS x 15 lt",
+      "cantidad": 45.0,
+      "unidad": "LT",
+      "precio_unitario": 3962.0,
+      "monto_item": 178334.0
+    },
+    {
+      "codigo": "NE-92027",
+      "detalle": "NUTRI CA PLUS x 15 lt",
+      "cantidad": 45.0,
+      "unidad": "LT",
+      "precio_unitario": 3962.0,
+      "monto_item": 178334.0
+    },
+    {
+      "codigo": "NE-102724",
+      "detalle": "WUXAL SUS BORO X 10 LT",
+      "cantidad": 10.0,
+      "unidad": "LT",
+      "precio_unitario": 4605.0,
+      "monto_item": 46058.0
+    }
+  ],
+  "source": "openai"
+}

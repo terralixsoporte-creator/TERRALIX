@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-90096",
+      "detalle": "BIOFRUT x 0,6 kg",
+      "cantidad": 4.0,
+      "precio_unitario": 88281.0,
+      "monto_item": 353125.0,
+      "unidad": "CU",
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

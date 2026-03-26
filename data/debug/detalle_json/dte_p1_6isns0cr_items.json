@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-86565",
+      "detalle": "POLISUL 35 x 208 lt",
+      "cantidad": 208.0,
+      "unidad": "LT",
+      "precio_unitario": 2408.0,
+      "monto_item": 500931.0
+    },
+    {
+      "codigo": "NE-96833",
+      "detalle": "RIPPER FULL SL X 20 LT",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 7581.0,
+      "monto_item": 151635.0
+    }
+  ],
+  "source": "openai"
+}

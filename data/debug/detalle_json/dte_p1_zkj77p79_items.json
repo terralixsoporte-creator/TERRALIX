@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "-",
+      "detalle": "Rhyzon 10L",
+      "cantidad": 170.0,
+      "unidad": "LT",
+      "precio_unitario": 14735.0,
+      "monto_item": 2505059.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

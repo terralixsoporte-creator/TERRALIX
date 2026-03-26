@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-63667",
+      "detalle": "DELICO 100 EC x 1 lt",
+      "cantidad": 5.0,
+      "unidad": "LT",
+      "precio_unitario": 17777.0,
+      "monto_item": 88885.0
+    },
+    {
+      "codigo": "NE-85147",
+      "detalle": "ERGER G x 20 lt",
+      "cantidad": 380.0,
+      "unidad": "LT",
+      "precio_unitario": 10164.0,
+      "monto_item": 3862320.0
+    }
+  ],
+  "source": "openai"
+}

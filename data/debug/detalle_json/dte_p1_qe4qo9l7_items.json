@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-34437",
+      "detalle": "REGLONE x 5 lt-FITOSANITARIOS(A)-AQ - HERBICIDA",
+      "cantidad": 40.0,
+      "unidad": "LT",
+      "precio_unitario": 12900.0,
+      "monto_item": 516003.0
+    },
+    {
+      "codigo": "NE-24799",
+      "detalle": "WINSPRAY MISCIBLE x 20 lt-FITOSANITARIOS(A)-AQ - I",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 6730.0,
+      "monto_item": 134610.0
+    }
+  ],
+  "source": "openai"
+}

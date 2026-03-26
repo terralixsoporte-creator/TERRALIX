@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-82804",
+      "detalle": "SILWET TX 100 x 1 lt",
+      "cantidad": 1.0,
+      "unidad": "LT",
+      "precio_unitario": 27707.0,
+      "monto_item": 27707.0
+    },
+    {
+      "codigo": "NE-54665",
+      "detalle": "GALIGAN 240 EC x 1 lt",
+      "cantidad": 5.0,
+      "unidad": "LT",
+      "precio_unitario": 17811.0,
+      "monto_item": 89058.0
+    }
+  ],
+  "source": "openai"
+}

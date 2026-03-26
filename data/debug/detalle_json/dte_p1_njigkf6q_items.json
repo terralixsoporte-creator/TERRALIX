@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-85949",
+      "detalle": "MZ 172020 25KG SB",
+      "cantidad": 1.0,
+      "unidad": "TM",
+      "precio_unitario": 644716.0,
+      "monto_item": 644717.0
+    },
+    {
+      "codigo": "NE-93890",
+      "detalle": "SEMILLAS (C), MAIZ CAMPEON TRATADO X45000SEM",
+      "cantidad": 1.0,
+      "unidad": "BC",
+      "precio_unitario": 569732.0,
+      "monto_item": 569733.0
+    }
+  ],
+  "source": "openai"
+}

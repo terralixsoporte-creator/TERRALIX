@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-55655",
+      "detalle": "PARAQUAT 276 SL x 20 lt",
+      "cantidad": 40.0,
+      "unidad": "LT",
+      "precio_unitario": 4443.0,
+      "monto_item": 177742.0
+    },
+    {
+      "codigo": "NE-38381",
+      "detalle": "PANZER GOLD x 20 lt",
+      "cantidad": 40.0,
+      "unidad": "LT",
+      "precio_unitario": 4710.0,
+      "monto_item": 188406.0
+    },
+    {
+      "codigo": "NE-38381",
+      "detalle": "PANZER GOLD x 20 lt",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 4710.0,
+      "monto_item": 94203.0
+    }
+  ],
+  "source": "openai"
+}

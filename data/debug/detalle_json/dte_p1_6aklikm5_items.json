@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-99853",
+      "detalle": "STIMPLEX X 10 LT SYNGENTA",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 11566.0,
+      "monto_item": 231339.0
+    }
+  ],
+  "source": "openai"
+}

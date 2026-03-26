@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-56572",
+      "detalle": "ORlUS 43 SC x 5 lt-FITOSANITARIOS(A)-AQ - FUNGICID",
+      "cantidad": 15.0,
+      "unidad": "LT",
+      "precio_unitario": 17428.0,
+      "monto_item": 261433.0
+    },
+    {
+      "codigo": "NE-102725",
+      "detalle": "WUXAL CALCIO X 10 LT-FITOSANITARIOS(A)-NV - CORREC",
+      "cantidad": 80.0,
+      "unidad": "LT",
+      "precio_unitario": 3722.0,
+      "monto_item": 297837.0
+    },
+    {
+      "codigo": "NE-102726",
+      "detalle": "WUXAL POTASIO X 10 LT-FITOSANITARIOS(A)-NV - CORRE",
+      "cantidad": 50.0,
+      "unidad": "LT",
+      "precio_unitario": 4035.0,
+      "monto_item": 201761.0
+    }
+  ],
+  "source": "openai"
+}

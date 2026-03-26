@@ -1,0 +1,54 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-54685",
+      "detalle": "CAPTAN 80 WG x 5 kg",
+      "cantidad": 5.0,
+      "unidad": "KG",
+      "precio_unitario": 16906.0,
+      "monto_item": 84534.0
+    },
+    {
+      "codigo": "NE-102486",
+      "detalle": "STONG 480 SC X 1 LT",
+      "cantidad": 2.0,
+      "unidad": "LT",
+      "precio_unitario": 470832.0,
+      "monto_item": 941666.0
+    },
+    {
+      "codigo": "NE-92990",
+      "detalle": "EXIREL x 1 lt",
+      "cantidad": 13.0,
+      "unidad": "LT",
+      "precio_unitario": 78864.0,
+      "monto_item": 1025239.0
+    },
+    {
+      "codigo": "NE-40417",
+      "detalle": "CORAGEN x 1 lt",
+      "cantidad": 3.0,
+      "unidad": "LT",
+      "precio_unitario": 223645.0,
+      "monto_item": 670937.0
+    },
+    {
+      "codigo": "NE-92413",
+      "detalle": "GLIFOSATO 480 SL x 20 lt",
+      "cantidad": 60.0,
+      "unidad": "LT",
+      "precio_unitario": 7651.0,
+      "monto_item": 459062.0
+    },
+    {
+      "codigo": "NE-63844",
+      "detalle": "GALIGAN 240 EC x 5 lt",
+      "cantidad": 5.0,
+      "unidad": "LT",
+      "precio_unitario": 18597.0,
+      "monto_item": 92990.0
+    }
+  ],
+  "source": "openai"
+}

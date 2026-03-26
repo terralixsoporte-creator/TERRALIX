@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-105027",
+      "detalle": "SPIRIT 500 SC X 1 LT-FITOSANITARIOS(A)-AQ - ACARIC",
+      "cantidad": 6.0,
+      "unidad": "LT",
+      "precio_unitario": 76065.0,
+      "monto_item": 456394.0
+    },
+    {
+      "codigo": "NE-96833",
+      "detalle": "RIPPER FULL SL X 20 LT-FITOSANITARIOS(A)-AQ - HERB",
+      "cantidad": 40.0,
+      "unidad": "LT",
+      "precio_unitario": 5412.0,
+      "monto_item": 216513.0
+    },
+    {
+      "codigo": "NE-105027",
+      "detalle": "SPIRIT 500 SC X 1 LT-FITOSANITARIOS(A)-AQ - ACARIC",
+      "cantidad": 2.0,
+      "unidad": "LT",
+      "precio_unitario": 76065.0,
+      "monto_item": 152131.0
+    }
+  ],
+  "source": "openai"
+}

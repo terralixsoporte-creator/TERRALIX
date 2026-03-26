@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "-",
+      "detalle": "CORTA DE MALEZA EN PARCELA",
+      "cantidad": 1.0,
+      "unidad": "UNID",
+      "precio_unitario": 100000.0,
+      "monto_item": 100000.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

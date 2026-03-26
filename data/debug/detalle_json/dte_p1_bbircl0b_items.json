@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-102486",
+      "detalle": "STONG 480 SC X 1 LT-FITOSANITARIOS(A)-AQ - INSECTI",
+      "cantidad": 2.0,
+      "unidad": "LT",
+      "precio_unitario": 428021.0,
+      "monto_item": 856043.0
+    },
+    {
+      "codigo": "NE-92990",
+      "detalle": "EXIREL x 1 lt-FITOSANITARIOS(A)-AQ - INSECTICIDA",
+      "cantidad": 12.0,
+      "unidad": "LT",
+      "precio_unitario": 73404.0,
+      "monto_item": 880852.0
+    },
+    {
+      "codigo": "NE-0136",
+      "detalle": "KARATE CON TEC.ZEON 050CS x1lt-FITOSANITARIOS(A)-A",
+      "cantidad": 5.0,
+      "unidad": "LT",
+      "precio_unitario": 40080.0,
+      "monto_item": 200401.0
+    }
+  ],
+  "source": "openai"
+}

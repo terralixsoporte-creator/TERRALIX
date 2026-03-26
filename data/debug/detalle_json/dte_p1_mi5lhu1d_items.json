@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-61604",
+      "detalle": "COPLA PP 16 MM NETAFIM",
+      "cantidad": 100.0,
+      "unidad": "CU",
+      "precio_unitario": 118.0,
+      "monto_item": 11819.0
+    },
+    {
+      "codigo": "NE-37869",
+      "detalle": "TIJERA PODAR FELCO 31",
+      "cantidad": 1.0,
+      "unidad": "CU",
+      "precio_unitario": 59533.0,
+      "monto_item": 59534.0
+    }
+  ],
+  "source": "openai"
+}

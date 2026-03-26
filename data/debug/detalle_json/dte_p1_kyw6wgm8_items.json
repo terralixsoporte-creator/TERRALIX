@@ -1,0 +1,54 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-34474",
+      "detalle": "BASFOLIAR K PREMIUM X 20 LT-FITOSANITARIOS(A)-NV",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 5881.0,
+      "monto_item": 117632.0
+    },
+    {
+      "codigo": "NE-102725",
+      "detalle": "WUXAL CALCIO X 10 LT-FITOSANITARIOS(A)-NV - CORREC",
+      "cantidad": 80.0,
+      "unidad": "LT",
+      "precio_unitario": 3454.0,
+      "monto_item": 276383.0
+    },
+    {
+      "codigo": "NE-102728",
+      "detalle": "WUXAL ZINC X 10 LT-FITOSANITARIOS(A)-NV - CORRECTO",
+      "cantidad": 20.0,
+      "unidad": "LT",
+      "precio_unitario": 4523.0,
+      "monto_item": 90475.0
+    },
+    {
+      "codigo": "NE-0150",
+      "detalle": "ZERO 5 EC x 1 lt-FITOSANITARIOS(A)-AQ - INSECTICID",
+      "cantidad": 3.0,
+      "unidad": "LT",
+      "precio_unitario": 29203.0,
+      "monto_item": 87612.0
+    },
+    {
+      "codigo": "NE-0150",
+      "detalle": "ZERO 5 EC x 1 lt-FITOSANITARIOS(A)-AQ - INSECTICID",
+      "cantidad": 1.0,
+      "unidad": "LT",
+      "precio_unitario": 29203.0,
+      "monto_item": 29204.0
+    },
+    {
+      "codigo": "NE-34437",
+      "detalle": "REGLONE x 5 lt-FITOSANITARIOS(A)-AQ - HERBICIDA",
+      "cantidad": 40.0,
+      "unidad": "LT",
+      "precio_unitario": 12359.0,
+      "monto_item": 494366.0
+    }
+  ],
+  "source": "openai"
+}

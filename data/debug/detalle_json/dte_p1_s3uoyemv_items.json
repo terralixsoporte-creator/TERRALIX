@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "3000001-LT-3000001-LT/0021-(10L)",
+      "detalle": "RHYZON 10L",
+      "cantidad": 60.0,
+      "unidad": "UN",
+      "precio_unitario": 14736.0,
+      "monto_item": 884160.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

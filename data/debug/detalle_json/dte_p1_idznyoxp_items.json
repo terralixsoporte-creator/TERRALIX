@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-92350",
+      "detalle": "SPRINGER 24 SC x 1 lt",
+      "cantidad": 1.0,
+      "unidad": "LT",
+      "precio_unitario": 63307.0,
+      "monto_item": 63308.0
+    },
+    {
+      "codigo": "NE-92350",
+      "detalle": "SPRINGER 24 SC x 1 lt",
+      "cantidad": 9.0,
+      "unidad": "LT",
+      "precio_unitario": 63307.0,
+      "monto_item": 569768.0
+    }
+  ],
+  "source": "openai"
+}

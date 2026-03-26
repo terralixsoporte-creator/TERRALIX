@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "3300001-LT-3300001-LT/0002(15L)",
+      "detalle": "BORDOCUP FLO 15 LT.",
+      "cantidad": 150.0,
+      "precio_unitario": 3333.0,
+      "monto_item": 500018.0,
+      "unidad": "UN",
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

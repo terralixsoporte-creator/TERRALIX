@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "NE-94569",
+      "detalle": "AMARRA GRIS HUMO COPLASA 2CM",
+      "cantidad": 20.0,
+      "unidad": "KG",
+      "precio_unitario": 3144.0,
+      "monto_item": 62880.0
+    }
+  ],
+  "source": "openai"
+}
