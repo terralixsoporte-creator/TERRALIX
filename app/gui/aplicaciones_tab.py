@@ -65,7 +65,7 @@ def create_applications_tab(parent):
     products_by_display: dict[str, dict] = {}
     products_by_code: dict[str, dict] = {}
     draft_products: list[dict[str, Any]] = []
-    calendar_cell_dates: dict[tuple[str, int], str] = {}
+    calendar_cells: list[dict[str, Any]] = []
     action_buttons: list[ttk.Button] = []
 
     today = date.today()
@@ -129,7 +129,7 @@ def create_applications_tab(parent):
     combo_status = ttk.Combobox(
         left,
         textvariable=status_var,
-        values=("PROGRAMADA", "EJECUTADA", "CANCELADA"),
+        values=("PROGRAMADA", "CANCELADA"),
         state="readonly",
         width=18,
     )
@@ -161,7 +161,7 @@ def create_applications_tab(parent):
     obs_entry = ttk.Entry(product_row, textvariable=product_obs_var, width=18)
     obs_entry.grid(row=0, column=3, sticky="ew", padx=(4, 6))
 
-    btn_add_product = ttk.Button(product_row, text="Agregar")
+    btn_add_product = ttk.Button(product_row, text="Cargar producto")
     btn_add_product.grid(row=0, column=4, sticky="e")
 
     draft_columns = ("codigo", "descripcion", "cantidad", "unidad")
@@ -179,15 +179,10 @@ def create_applications_tab(parent):
     btn_remove_product = ttk.Button(left, text="Quitar seleccionado")
     btn_remove_product.grid(row=13, column=0, sticky="w")
 
-    register_out_var = tk.IntVar(value=0)
-    chk_register_out = ttk.Checkbutton(
-        left,
-        text="Registrar salida de inventario ahora (si estado = EJECUTADA)",
-        variable=register_out_var,
-    )
-    chk_register_out.grid(row=14, column=0, sticky="w", pady=(8, 8))
+    action_hint = ttk.Label(left, text="Paso 1: Cargar productos. Paso 2: Aceptar aplicacion.")
+    action_hint.grid(row=14, column=0, sticky="w", pady=(8, 2))
 
-    btn_save_application = ttk.Button(left, text="Guardar aplicacion")
+    btn_save_application = ttk.Button(left, text="Aceptar aplicacion")
     btn_save_application.grid(row=15, column=0, sticky="ew")
 
     # --- Right panel: calendar + management ---
@@ -219,12 +214,44 @@ def create_applications_tab(parent):
     btn_refresh = ttk.Button(top, text="Refrescar")
     btn_refresh.grid(row=0, column=6)
 
-    cal_columns = ("LUN", "MAR", "MIE", "JUE", "VIE", "SAB", "DOM")
-    cal_tree = ttk.Treeview(right, columns=cal_columns, show="headings", height=6, selectmode="browse")
-    cal_tree.grid(row=1, column=0, sticky="ew")
-    for c in cal_columns:
-        cal_tree.heading(c, text=c)
-        cal_tree.column(c, width=85, minwidth=70, anchor="center")
+    day_headers = ("LUN", "MAR", "MIE", "JUE", "VIE", "SAB", "DOM")
+    cal_grid = tk.Frame(right, bg="#E4E4E4", bd=1, relief="solid")
+    cal_grid.grid(row=1, column=0, sticky="ew")
+    for col in range(7):
+        cal_grid.columnconfigure(col, weight=1)
+    for row in range(7):
+        cal_grid.rowconfigure(row, weight=1)
+
+    for idx, day_name in enumerate(day_headers):
+        lbl_day = tk.Label(
+            cal_grid,
+            text=day_name,
+            bg="#F0F0F0",
+            fg="#2A2A2A",
+            font=("Segoe UI", 9, "bold"),
+            bd=1,
+            relief="solid",
+            padx=2,
+            pady=2,
+        )
+        lbl_day.grid(row=0, column=idx, sticky="nsew")
+
+    for r in range(1, 7):
+        for c in range(7):
+            cell = tk.Label(
+                cal_grid,
+                text="",
+                bg="#FFFFFF",
+                fg="#202020",
+                font=("Segoe UI", 9),
+                bd=1,
+                relief="solid",
+                padx=2,
+                pady=4,
+                cursor="hand2",
+            )
+            cell.grid(row=r, column=c, sticky="nsew")
+            calendar_cells.append({"widget": cell, "date": None})
 
     lbl_selected = ttk.Label(right, textvariable=selected_date_var)
     lbl_selected.grid(row=2, column=0, sticky="w", pady=(6, 4))
@@ -343,6 +370,243 @@ def create_applications_tab(parent):
                 ),
             )
 
+    def _calendar_bg_for_day(info: dict[str, Any]) -> str:
+        programadas = int(info.get("programadas", 0) or 0)
+        ejecutadas = int(info.get("ejecutadas", 0) or 0)
+        canceladas = int(info.get("canceladas", 0) or 0)
+
+        # Prioridad visual:
+        # 1) Si hay al menos una programada, se muestra amarillo.
+        # 2) Si no hay programadas y hay ejecutadas, se muestra verde.
+        # 3) Solo canceladas no se pintan (queda blanco).
+        if programadas > 0:
+            return "#FCE49A"
+        if ejecutadas > 0:
+            return "#A6E8AF"
+        if canceladas > 0:
+            return "#FFFFFF"
+        return "#FFFFFF"
+
+    def _paint_selected_date() -> None:
+        selected_iso = _parse_date_iso(selected_date_var.get())
+        for cell_data in calendar_cells:
+            widget = cell_data["widget"]
+            iso = cell_data.get("date")
+            base_bg = cell_data.get("base_bg", "#FFFFFF")
+            widget.configure(bg=base_bg, fg="#202020", bd=1, relief="solid")
+            if iso and iso == selected_iso:
+                widget.configure(bd=2, relief="solid", fg="#0B4A33")
+
+    def _select_calendar_date(iso: str) -> None:
+        if not iso:
+            return
+        selected_date_var.set(iso)
+        form_date_var.set(iso)
+        _paint_selected_date()
+        refresh_applications_list()
+
+    def _open_real_outputs_dialog(
+        app_id: int,
+        app_title: str,
+        fecha_default: str,
+        planned_rows: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        dialog = tk.Toplevel(frame)
+        dialog.title(f"Salida real aplicacion #{app_id}")
+        dialog.geometry("760x520")
+        dialog.resizable(False, False)
+        dialog.configure(bg="#FFFEFF")
+        dialog.transient(frame.winfo_toplevel())
+        dialog.grab_set()
+
+        result: dict[str, Any] = {"ok": False, "data": None}
+
+        header = ttk.Frame(dialog, padding=8)
+        header.pack(fill="x")
+        ttk.Label(header, text=f"Aplicacion #{app_id}: {app_title}", font=("Segoe UI", 10, "bold")).pack(anchor="w")
+
+        date_row = ttk.Frame(dialog, padding=(8, 0, 8, 8))
+        date_row.pack(fill="x")
+        ttk.Label(date_row, text="Fecha ejecucion (YYYY-MM-DD):").pack(side="left")
+        exec_date_var = tk.StringVar(value=fecha_default)
+        ttk.Entry(date_row, textvariable=exec_date_var, width=14).pack(side="left", padx=(6, 0))
+
+        body = ttk.Frame(dialog, padding=(8, 0, 8, 8))
+        body.pack(fill="both", expand=True)
+        body.columnconfigure(0, weight=1)
+        body.rowconfigure(1, weight=1)
+
+        ttk.Label(body, text="Productos reales utilizados:").grid(row=0, column=0, sticky="w", pady=(0, 4))
+
+        cols = ("codigo", "descripcion", "cantidad", "unidad", "observacion")
+        tree = ttk.Treeview(body, columns=cols, show="headings", height=10, selectmode="browse")
+        tree.grid(row=1, column=0, sticky="nsew")
+        tree.heading("codigo", text="Codigo")
+        tree.heading("descripcion", text="Descripcion")
+        tree.heading("cantidad", text="Cantidad")
+        tree.heading("unidad", text="Unidad")
+        tree.heading("observacion", text="Observacion")
+        tree.column("codigo", width=95, minwidth=70, anchor="w")
+        tree.column("descripcion", width=220, minwidth=140, anchor="w")
+        tree.column("cantidad", width=85, minwidth=70, anchor="e")
+        tree.column("unidad", width=60, minwidth=55, anchor="center")
+        tree.column("observacion", width=190, minwidth=120, anchor="w")
+
+        data_rows: list[dict[str, Any]] = []
+        for p in planned_rows:
+            data_rows.append(
+                {
+                    "codigo": (p.get("codigo") or "").strip().upper(),
+                    "descripcion": (p.get("descripcion_estandar") or "").strip(),
+                    "cantidad": float(p.get("cantidad", 0) or 0),
+                    "unidad": (p.get("unidad") or "").strip().upper(),
+                    "observacion": (p.get("observacion") or "").strip(),
+                }
+            )
+
+        def _render_rows() -> None:
+            for iid in tree.get_children():
+                tree.delete(iid)
+            for r in data_rows:
+                tree.insert(
+                    "",
+                    "end",
+                    values=(
+                        r["codigo"],
+                        r.get("descripcion", ""),
+                        _fmt_qty(float(r.get("cantidad", 0) or 0)),
+                        r.get("unidad", ""),
+                        r.get("observacion", ""),
+                    ),
+                )
+
+        editor = ttk.Frame(dialog, padding=8)
+        editor.pack(fill="x")
+        editor.columnconfigure(5, weight=1)
+
+        ttk.Label(editor, text="Producto:").grid(row=0, column=0, sticky="w")
+        selected_real_product_var = tk.StringVar(value="")
+        combo_real_product = ttk.Combobox(editor, textvariable=selected_real_product_var, width=34)
+        combo_real_product.grid(row=0, column=1, padx=(4, 8), sticky="w")
+        combo_real_product["values"] = list(combo_product["values"] or [])
+        if combo_real_product["values"]:
+            selected_real_product_var.set(str(combo_real_product["values"][0]))
+
+        ttk.Label(editor, text="Cant:").grid(row=0, column=2, sticky="w")
+        real_qty_var = tk.StringVar(value="")
+        ttk.Entry(editor, textvariable=real_qty_var, width=10).grid(row=0, column=3, padx=(4, 8), sticky="w")
+
+        ttk.Label(editor, text="Obs:").grid(row=0, column=4, sticky="w")
+        real_obs_var = tk.StringVar(value="")
+        ttk.Entry(editor, textvariable=real_obs_var, width=20).grid(row=0, column=5, padx=(4, 8), sticky="ew")
+
+        def _add_or_merge_real_product() -> None:
+            code = _extract_code(selected_real_product_var.get())
+            if not code:
+                messagebox.showwarning("Aplicaciones", "Selecciona un codigo de producto.", parent=dialog)
+                return
+            try:
+                qty = float(str(real_qty_var.get()).replace(",", "."))
+            except Exception:
+                messagebox.showwarning("Aplicaciones", "Cantidad invalida.", parent=dialog)
+                return
+            if qty <= 0:
+                messagebox.showwarning("Aplicaciones", "La cantidad debe ser mayor a cero.", parent=dialog)
+                return
+
+            product = products_by_code.get(code) or {}
+            desc = (product.get("descripcion_estandar") or "").strip()
+            um = (product.get("unidad_base") or "").strip().upper()
+            obs = (real_obs_var.get() or "").strip()
+
+            existing = next((r for r in data_rows if r.get("codigo") == code), None)
+            if existing is None:
+                data_rows.append(
+                    {
+                        "codigo": code,
+                        "descripcion": desc,
+                        "cantidad": qty,
+                        "unidad": um,
+                        "observacion": obs,
+                    }
+                )
+            else:
+                existing["cantidad"] = float(existing.get("cantidad", 0) or 0) + qty
+                if obs:
+                    prev = (existing.get("observacion") or "").strip()
+                    existing["observacion"] = f"{prev} | {obs}" if prev else obs
+
+            real_qty_var.set("")
+            real_obs_var.set("")
+            _render_rows()
+
+        def _remove_selected_real_product() -> None:
+            selected = tree.selection()
+            if not selected:
+                return
+            code = str(tree.item(selected[0]).get("values", [""])[0]).strip().upper()
+            if not code:
+                return
+            data_rows[:] = [r for r in data_rows if str(r.get("codigo", "")).upper() != code]
+            _render_rows()
+
+        buttons = ttk.Frame(dialog, padding=(8, 0, 8, 8))
+        buttons.pack(fill="x")
+        ttk.Button(buttons, text="Cargar producto real", command=_add_or_merge_real_product).pack(side="left")
+        ttk.Button(buttons, text="Quitar seleccionado", command=_remove_selected_real_product).pack(side="left", padx=(6, 0))
+
+        footer = ttk.Frame(dialog, padding=8)
+        footer.pack(fill="x")
+
+        def _cancel() -> None:
+            dialog.destroy()
+
+        def _accept() -> None:
+            fecha_exec = _parse_date_iso(exec_date_var.get() or "")
+            if not fecha_exec:
+                messagebox.showwarning("Aplicaciones", "Fecha de ejecucion invalida.", parent=dialog)
+                return
+            if not data_rows:
+                messagebox.showwarning(
+                    "Aplicaciones",
+                    "Debes registrar al menos un producto real utilizado.",
+                    parent=dialog,
+                )
+                return
+
+            payload_products = [
+                {
+                    "codigo": str(r.get("codigo", "")).strip().upper(),
+                    "cantidad": float(r.get("cantidad", 0) or 0),
+                    "unidad": str(r.get("unidad", "")).strip().upper(),
+                    "observacion": str(r.get("observacion", "")).strip(),
+                }
+                for r in data_rows
+                if str(r.get("codigo", "")).strip()
+            ]
+            if not payload_products:
+                messagebox.showwarning(
+                    "Aplicaciones",
+                    "No hay productos validos para registrar salida real.",
+                    parent=dialog,
+                )
+                return
+
+            result["ok"] = True
+            result["data"] = {
+                "fecha_ejecucion": fecha_exec,
+                "productos_reales": payload_products,
+            }
+            dialog.destroy()
+
+        ttk.Button(footer, text="Cancelar", command=_cancel).pack(side="right")
+        ttk.Button(footer, text="Aceptar salida real", command=_accept).pack(side="right", padx=(0, 6))
+
+        _render_rows()
+        dialog.bind("<Escape>", lambda _e: _cancel())
+        dialog.wait_window()
+        return result["data"] if result.get("ok") else None
+
     def refresh_products_combo() -> None:
         try:
             db = _db_path()
@@ -426,7 +690,6 @@ def create_applications_tab(parent):
             form_date_var.set(date.today().isoformat())
         txt_description.delete("1.0", tk.END)
         status_var.set("PROGRAMADA")
-        register_out_var.set(0)
         draft_products.clear()
         _render_draft_products()
 
@@ -491,32 +754,62 @@ def create_applications_tab(parent):
             _set_status(f"[WARN] No se pudo cargar calendario: {e}")
             summary = {}
 
-        for iid in cal_tree.get_children():
-            cal_tree.delete(iid)
-        calendar_cell_dates.clear()
-
         cal = calendar.Calendar(firstweekday=0)
         weeks = cal.monthdayscalendar(year, month)
         while len(weeks) < 6:
             weeks.append([0, 0, 0, 0, 0, 0, 0])
 
+        flat_days: list[int] = []
         for week in weeks:
-            values: list[str] = []
-            date_map: dict[int, str] = {}
-            for idx, day_num in enumerate(week):
-                if day_num <= 0:
-                    values.append("")
-                    continue
-                iso = f"{year:04d}-{month:02d}-{day_num:02d}"
-                info = summary.get(iso, {})
-                total = int(info.get("total", 0) or 0)
-                done = int(info.get("ejecutadas", 0) or 0)
-                values.append(f"{day_num} ({done}/{total})" if total > 0 else str(day_num))
-                date_map[idx] = iso
+            flat_days.extend(week)
 
-            iid = cal_tree.insert("", "end", values=tuple(values))
-            for col_idx, iso in date_map.items():
-                calendar_cell_dates[(iid, col_idx)] = iso
+        for idx, day_num in enumerate(flat_days):
+            if idx >= len(calendar_cells):
+                break
+            cell_data = calendar_cells[idx]
+            widget = cell_data["widget"]
+
+            if day_num <= 0:
+                cell_data["date"] = None
+                cell_data["base_bg"] = "#F5F5F5"
+                widget.unbind("<Button-1>")
+                widget.configure(
+                    text="",
+                    bg="#F5F5F5",
+                    fg="#B0B0B0",
+                    cursor="arrow",
+                    bd=1,
+                    relief="solid",
+                )
+                continue
+
+            iso = f"{year:04d}-{month:02d}-{day_num:02d}"
+            info = summary.get(iso, {})
+            total = int(info.get("total", 0) or 0)
+            done = int(info.get("ejecutadas", 0) or 0)
+            pending = int(info.get("programadas", 0) or 0)
+            cell_bg = _calendar_bg_for_day(info)
+            text = f"{day_num}"
+            if total > 0:
+                text = f"{day_num}\nE:{done} P:{pending}"
+
+            cell_data["date"] = iso
+            cell_data["base_bg"] = cell_bg
+            widget.configure(
+                text=text,
+                bg=cell_bg,
+                fg="#202020",
+                cursor="hand2",
+                bd=1,
+                relief="solid",
+            )
+
+            def _click(_event, iso_value=iso):
+                _select_calendar_date(iso_value)
+
+            widget.bind("<Button-1>", _click)
+
+        _paint_selected_date()
 
     def _change_month(delta: int) -> None:
         y = current_year["value"]
@@ -541,22 +834,6 @@ def create_applications_tab(parent):
         selected_date_var.set(now.isoformat())
         form_date_var.set(now.isoformat())
         refresh_calendar()
-        refresh_applications_list()
-
-    def on_calendar_click(event) -> None:
-        row_id = cal_tree.identify_row(event.y)
-        col_id = cal_tree.identify_column(event.x)
-        if not row_id or not col_id or col_id == "#0":
-            return
-        try:
-            col_idx = int(col_id.replace("#", "")) - 1
-        except Exception:
-            return
-        iso = calendar_cell_dates.get((row_id, col_idx))
-        if not iso:
-            return
-        selected_date_var.set(iso)
-        form_date_var.set(iso)
         refresh_applications_list()
 
     def _selected_application_id() -> int:
@@ -600,11 +877,10 @@ def create_applications_tab(parent):
             return
 
         estado = (status_var.get() or "PROGRAMADA").strip().upper()
-        if estado not in ("PROGRAMADA", "EJECUTADA", "CANCELADA"):
+        if estado not in ("PROGRAMADA", "CANCELADA"):
             messagebox.showwarning("Aplicaciones", "Estado invalido.")
             return
 
-        registrar_salidas = bool(register_out_var.get()) and estado == "EJECUTADA"
         descripcion = txt_description.get("1.0", tk.END).strip()
 
         payload_products = [
@@ -616,7 +892,7 @@ def create_applications_tab(parent):
             }
             for p in draft_products
         ]
-        fecha_ejec = fecha_prog if estado == "EJECUTADA" else None
+        fecha_ejec = None
 
         def _worker():
             return INV.create_field_application(
@@ -626,7 +902,7 @@ def create_applications_tab(parent):
                 descripcion=descripcion,
                 estado=estado,
                 productos=payload_products,
-                registrar_salidas=registrar_salidas,
+                registrar_salidas=False,
                 fecha_ejecucion=fecha_ejec,
                 allow_negative=False,
             )
@@ -645,10 +921,9 @@ def create_applications_tab(parent):
             form_date_var.set(fecha_prog)
             refresh_calendar()
             refresh_applications_list()
-            movements = int(res.get("movements_created", 0) or 0)
             _set_status(
                 f"[OK] Aplicacion #{res.get('application_id')} guardada. "
-                f"Productos={res.get('products_count', 0)} | salidas={movements}"
+                f"Productos planificados={res.get('products_count', 0)}"
             )
 
         run_async("[SAVE] Guardando aplicacion...", _worker, _done)
@@ -659,22 +934,40 @@ def create_applications_tab(parent):
             messagebox.showwarning("Aplicaciones", "Selecciona una aplicacion.")
             return
 
+        app_selected = apps_tree.selection()
+        if not app_selected:
+            messagebox.showwarning("Aplicaciones", "Selecciona una aplicacion.")
+            return
+        values = apps_tree.item(app_selected[0]).get("values", [])
+        app_title = str(values[3]).strip() if len(values) > 3 else ""
+
         fecha_exec = _parse_date_iso(selected_date_var.get()) or date.today().isoformat()
-        ok = messagebox.askyesno(
-            "Aplicaciones",
-            f"Se marcara la aplicacion #{app_id} como EJECUTADA\n"
-            "y se registraran salidas de inventario pendientes.\n\n"
-            f"Fecha de ejecucion: {fecha_exec}\n\n"
-            "Deseas continuar?",
+        planned_rows = INV.list_field_application_products(_db_path(), app_id)
+        real_data = _open_real_outputs_dialog(
+            app_id=app_id,
+            app_title=app_title,
+            fecha_default=fecha_exec,
+            planned_rows=planned_rows,
         )
-        if not ok:
+        if not real_data:
             return
 
+        fecha_real = real_data["fecha_ejecucion"]
+        productos_reales = real_data["productos_reales"]
+
         def _worker():
+            rep = INV.replace_field_application_products(
+                db_path=_db_path(),
+                application_id=app_id,
+                productos=productos_reales,
+                require_no_movements=True,
+            )
+            if not rep.get("ok"):
+                return rep
             return INV.execute_field_application(
                 db_path=_db_path(),
                 application_id=app_id,
-                fecha_ejecucion=fecha_exec,
+                fecha_ejecucion=fecha_real,
                 registrar_salidas=True,
                 allow_negative=False,
             )
@@ -692,7 +985,7 @@ def create_applications_tab(parent):
                 f"salidas_creadas={res.get('movements_created', 0)}"
             )
 
-        run_async("[RUN] Ejecutando aplicacion...", _worker, _done)
+        run_async("[RUN] Registrando salida real y ejecutando aplicacion...", _worker, _done)
 
     def cancel_selected_application() -> None:
         app_id = _selected_application_id()
@@ -743,7 +1036,6 @@ def create_applications_tab(parent):
     btn_cancel.configure(command=cancel_selected_application)
 
     combo_filter_status.bind("<<ComboboxSelected>>", lambda _e: (refresh_calendar(), refresh_applications_list()))
-    cal_tree.bind("<ButtonRelease-1>", on_calendar_click)
     apps_tree.bind("<<TreeviewSelect>>", on_application_selected)
 
     # Entradas rapidas

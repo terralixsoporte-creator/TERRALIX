@@ -1735,6 +1735,97 @@ def list_field_application_products(db_path: str, application_id: int) -> List[D
         con.close()
 
 
+def replace_field_application_products(
+    db_path: str,
+    application_id: int,
+    productos: Optional[List[Dict[str, Any]]],
+    require_no_movements: bool = True,
+) -> Dict[str, Any]:
+    """
+    Reemplaza el detalle de productos de una aplicacion.
+
+    Uso principal:
+      - Guardar productos reales al momento de ejecutar una aplicacion.
+    """
+    ensure_inventory_schema(db_path)
+    app_id = int(application_id or 0)
+    if app_id <= 0:
+        return {"ok": False, "error": "ID de aplicacion invalido."}
+
+    normalized_products = _normalize_application_products(productos)
+    if not normalized_products.get("ok"):
+        return normalized_products
+
+    products = normalized_products["products"]
+    if not products:
+        return {"ok": False, "error": "Debes ingresar al menos un producto real."}
+
+    con = _connect(db_path)
+    try:
+        app = con.execute(
+            "SELECT id FROM aplicaciones_campo WHERE id = ?",
+            (app_id,),
+        ).fetchone()
+        if app is None:
+            return {"ok": False, "error": f"No existe la aplicacion #{app_id}."}
+
+        if require_no_movements:
+            row = con.execute(
+                """
+                SELECT COUNT(*) AS n
+                FROM aplicaciones_campo_productos
+                WHERE aplicacion_id = ?
+                  AND movimiento_id IS NOT NULL
+                """,
+                (app_id,),
+            ).fetchone()
+            linked = int(row["n"] or 0) if row else 0
+            if linked > 0:
+                return {
+                    "ok": False,
+                    "error": "La aplicacion ya tiene salidas registradas y no se puede reemplazar el detalle real.",
+                    "application_id": app_id,
+                    "linked_movements": linked,
+                }
+
+        con.execute(
+            "DELETE FROM aplicaciones_campo_productos WHERE aplicacion_id = ?",
+            (app_id,),
+        )
+        for p in products:
+            con.execute(
+                """
+                INSERT INTO aplicaciones_campo_productos
+                (aplicacion_id, codigo, cantidad, unidad, observacion, movimiento_id, created_at)
+                VALUES (?, ?, ?, ?, ?, NULL, datetime('now'))
+                """,
+                (
+                    app_id,
+                    p["codigo"],
+                    p["cantidad"],
+                    p["unidad"],
+                    p["observacion"],
+                ),
+            )
+
+        con.execute(
+            """
+            UPDATE aplicaciones_campo
+            SET updated_at = datetime('now')
+            WHERE id = ?
+            """,
+            (app_id,),
+        )
+        con.commit()
+        return {
+            "ok": True,
+            "application_id": app_id,
+            "products_count": len(products),
+        }
+    finally:
+        con.close()
+
+
 def execute_field_application(
     db_path: str,
     application_id: int,
