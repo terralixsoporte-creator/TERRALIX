@@ -172,7 +172,7 @@ def create_update_tab(parent):
         print(
             """
 Iniciando actualizacion de base de datos.
-Secuencia: 1) Descarga SII -> 2) Lectura IA -> 3) Categorizacion
+Secuencia: 1) Descarga SII -> 2) Lectura IA -> 3) Categorizacion -> 4) Backfill codigos
 No cierres esta ventana hasta que termine.
 """
         )
@@ -326,7 +326,7 @@ No cierres esta ventana hasta que termine.
         def run_ai_reader_batch(ruta_pdf: str, db_path: str):
             from app.core.DTE_Recibidos import ai_reader as AIR
 
-            print("\n[2/3] Iniciando lectura IA de PDFs...\n")
+            print("\n[2/4] Iniciando lectura IA de PDFs...\n")
             targets = AIR._collect_target_files(file_arg=None, dir_arg=ruta_pdf)
             if not targets:
                 print("No se encontraron PDFs para procesar con IA.")
@@ -416,7 +416,7 @@ No cierres esta ventana hasta que termine.
 
             gui_batch_sleep = max(0.0, _env_float("GUI_REVIEW_BATCH_SLEEP", 0.05))
             CAT.BATCH_SLEEP = gui_batch_sleep
-            print(f"\n[3/3] Iniciando categorizacion contable (batch_sleep={gui_batch_sleep:.2f}s)...\n")
+            print(f"\n[3/4] Iniciando categorizacion contable (batch_sleep={gui_batch_sleep:.2f}s)...\n")
             try:
                 CAT.main()
             except SystemExit as e:
@@ -424,6 +424,28 @@ No cierres esta ventana hasta que termine.
                 if code not in (0, None):
                     raise RuntimeError(f"categorizer finalizo con codigo {code}")
             print("\n[OK] Categorizacion finalizada.\n")
+
+        def run_codigo_backfill_insumos(ruta_pdf: str, db_path: str):
+            from app.core.DTE_Recibidos import ai_reader as AIR
+
+            print("[4/4] Releyendo PDFs para completar columna 'codigo' en INSUMOS_AGRICOLAS...\n")
+            result = AIR.backfill_missing_codigo_from_pdfs(
+                db_path=db_path,
+                pdf_dir=ruta_pdf,
+                categoria_objetivo="INSUMOS_AGRICOLAS",
+                debug=False,
+            )
+            if not result.get("ok"):
+                raise RuntimeError(f"backfill codigo fallo: {result.get('error', 'error_desconocido')}")
+
+            print(
+                "[OK] Backfill codigo terminado: "
+                f"docs_objetivo={result.get('n_docs_objetivo', 0)} | "
+                f"docs_procesados={result.get('n_docs_procesados', 0)} | "
+                f"pdf_faltante={result.get('n_docs_con_pdf_faltante', 0)} | "
+                f"errores_ia={result.get('n_docs_error_ia', 0)} | "
+                f"filas_actualizadas={result.get('n_filas_codigo_actualizadas', 0)}\n"
+            )
 
         def ejecutar_pipeline(ruta_pdf: str, db_path: str):
             from app.core.DTE_Recibidos.pipeline_guard import (
@@ -455,6 +477,7 @@ No cierres esta ventana hasta que termine.
 
                 run_ai_reader_batch(ruta_pdf, db_path)
                 run_categorizer_batch()
+                run_codigo_backfill_insumos(ruta_pdf, db_path)
                 reporte_path = _generar_reporte_sin_clasificar(db_path)
                 if reporte_path:
                     print(f"[OK] Reporte de sin clasificar generado: {reporte_path}")

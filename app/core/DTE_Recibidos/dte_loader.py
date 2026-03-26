@@ -431,6 +431,7 @@ add_column_if_missing(engine, "documentos", "ADD COLUMN giro TEXT")
 add_column_if_missing(engine, "documentos", "ADD COLUMN detalle_link TEXT")
 
 # âœ… nuevas columnas del detalle
+add_column_if_missing(engine, "detalle", "ADD COLUMN codigo TEXT")
 add_column_if_missing(engine, "detalle", "ADD COLUMN categoria TEXT")
 add_column_if_missing(engine, "detalle", "ADD COLUMN subcategoria TEXT")
 add_column_if_missing(engine, "detalle", "ADD COLUMN tipo_gasto TEXT")
@@ -501,11 +502,13 @@ def _insertar_items_detalle(conn, doc_id: str, items: list[dict]):
             return extraer_monto(str(x), default=0.0)
 
     for idx, it in enumerate(items, start=1):
+        codigo_raw = it.get("codigo", "")
+        codigo_txt = str(codigo_raw).strip() if codigo_raw is not None else ""
         row = {
             "id_det": f"{doc_id}:{idx}",
             "id_doc": doc_id,
             "linea": idx,
-            "codigo": str(it.get("codigo", "")),
+            "codigo": codigo_txt,
             "descripcion": _collapse_spaces(str(it.get("detalle", it.get("descripcion", "")))),
             "cantidad": (it.get("cantidad", 0)),
             "precio_unitario": (it.get("precio_unitario", 0)),

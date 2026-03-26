@@ -35,6 +35,7 @@ _REVIEW_FILL   = PatternFill("solid", fgColor="FFF3CD")   # amarillo: needs_revi
 _SIN_CLAS_FILL = PatternFill("solid", fgColor="F8D7DA")   # rojo claro: SIN_CLASIFICAR
 _MANUAL_FILL   = PatternFill("solid", fgColor="D4EDDA")   # verde: corregido manual
 _LOCKED_FONT   = Font(color="888888", italic=True)
+_HYPERLINK_FONT = Font(color="0563C1", underline="single")
 _THIN_BORDER   = Border(
     left=Side(style="thin"), right=Side(style="thin"),
     top=Side(style="thin"), bottom=Side(style="thin"),
@@ -42,7 +43,7 @@ _THIN_BORDER   = Border(
 
 # Columnas de detalle que se exportan (orden importa)
 _DETALLE_COLS = [
-    "id_det", "id_doc", "linea", "descripcion", "cantidad",
+    "id_det", "id_doc", "linea", "codigo", "descripcion", "cantidad",
     "precio_unitario", "monto_item",
     "razon_social", "giro", "fecha_emision",
     "categoria", "subcategoria", "tipo_gasto",
@@ -55,6 +56,55 @@ _EDITABLE_COLS = {"categoria", "subcategoria", "tipo_gasto"}
 
 # Columna oculta para detectar cambios
 _HASH_COL = "hash_original"
+
+
+def _to_excel_file_uri(path_value: str) -> Optional[str]:
+    """
+    Convierte una ruta local a URI file:// para hipervínculos en Excel.
+    Priorizando la carpeta PDF configurada en el equipo actual.
+    """
+    raw = (path_value or "").strip()
+    if not raw:
+        return None
+
+    base_pdf_raw = (os.getenv("RUTA_PDF_DTE_RECIBIDOS") or "").strip()
+    base_pdf = Path(base_pdf_raw).expanduser() if base_pdf_raw else None
+
+    p = Path(raw).expanduser()
+    candidates: List[Path] = []
+
+    # 1) Prioriza carpeta local configurada + nombre del archivo guardado en DB
+    if base_pdf and p.name:
+        candidates.append(base_pdf / p.name)
+
+    # 2) Si DB tiene ruta relativa, también intentar dentro de la carpeta local
+    if base_pdf and not p.is_absolute():
+        candidates.append(base_pdf / p)
+
+    # 3) Mantener compatibilidad con la ruta original guardada en DB
+    candidates.append(p)
+
+    chosen = None
+    seen = set()
+    for c in candidates:
+        key = str(c).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        if c.exists():
+            chosen = c
+            break
+
+    if chosen is None:
+        chosen = candidates[0]
+
+    try:
+        return chosen.resolve().as_uri()
+    except Exception:
+        normalized = str(chosen).replace("\\", "/")
+        if len(normalized) > 1 and normalized[1] == ":":
+            return f"file:///{normalized}"
+        return normalized
 
 
 def _row_hash(cat: str, sub: str, tipo: str) -> str:
@@ -86,6 +136,17 @@ def export_to_excel(
     con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row
 
+    # Compatibilidad con DBs antiguas.
+    detalle_cols = {r[1] for r in con.execute("PRAGMA table_info(detalle);").fetchall()}
+    if "codigo" not in detalle_cols:
+        con.execute("ALTER TABLE detalle ADD COLUMN codigo TEXT")
+        con.commit()
+
+    documentos_cols = {r[1] for r in con.execute("PRAGMA table_info(documentos);").fetchall()}
+    if "ruta_pdf" not in documentos_cols:
+        con.execute("ALTER TABLE documentos ADD COLUMN ruta_pdf TEXT")
+        con.commit()
+
     # --- Catálogo ---
     catalogo = con.execute(
         "SELECT id, categoria_costo, subcategoria_costo, tipo_gasto "
@@ -100,11 +161,12 @@ def export_to_excel(
 
     detalle_rows = con.execute(f"""
         SELECT
-            d.id_det, d.id_doc, d.linea, d.descripcion, d.cantidad,
+            d.id_det, d.id_doc, d.linea, COALESCE(d.codigo, '') AS codigo, d.descripcion, d.cantidad,
             d.precio_unitario, d.monto_item,
             COALESCE(d.razon_social, doc.razon_social, '') AS razon_social,
             COALESCE(d.giro, doc.giro, '') AS giro,
             COALESCE(d.fecha_emision, doc.fecha_emision, '') AS fecha_emision,
+            COALESCE(doc.ruta_pdf, '') AS ruta_pdf,
             d.categoria, d.subcategoria, d.tipo_gasto,
             d.catalogo_costo_id, d.confianza_categoria, d.needs_review,
             d.origen_clasificacion, d.motivo_clasificacion
@@ -163,6 +225,13 @@ def export_to_excel(
             # Columnas no editables en gris
             if col_name not in _EDITABLE_COLS:
                 cell.font = _LOCKED_FONT
+
+            # Click en descripcion -> abre PDF del DTE correspondiente
+            if col_name == "descripcion":
+                pdf_uri = _to_excel_file_uri(r["ruta_pdf"] if "ruta_pdf" in r.keys() else "")
+                if pdf_uri:
+                    cell.hyperlink = pdf_uri
+                    cell.font = _HYPERLINK_FONT
 
     # Dropdown de categoría
     cat_col_idx = headers.index("categoria") + 1

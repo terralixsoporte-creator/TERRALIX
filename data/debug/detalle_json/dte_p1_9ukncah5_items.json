@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "codigo": "-",
+      "detalle": "DESBROTE PLANTAS DE CEREZOS",
+      "cantidad": 11443.0,
+      "unidad": "UNID",
+      "precio_unitario": 60.0,
+      "monto_item": 686580.0,
+      "descuento": 0.0,
+      "impuesto_adicional": 0.0
+    }
+  ],
+  "source": "openai"
+}

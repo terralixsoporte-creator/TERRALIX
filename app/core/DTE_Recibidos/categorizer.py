@@ -1593,6 +1593,7 @@ def main() -> None:
     local_clf = get_classifier(DB_PATH)
     con = connect_db(DB_PATH)
 
+    add_column_if_missing_sqlite(con, "detalle", "codigo TEXT")
     add_column_if_missing_sqlite(con, "detalle", "needs_review INTEGER")
     add_column_if_missing_sqlite(con, "detalle", "categoria TEXT")
     add_column_if_missing_sqlite(con, "detalle", "subcategoria TEXT")

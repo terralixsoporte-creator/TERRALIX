@@ -6,6 +6,8 @@ import sys
 import glob
 import base64
 import mimetypes
+import re
+import unicodedata
 from datetime import datetime
 import sqlite3
 import json
@@ -25,6 +27,7 @@ import atexit
 _ROOT = Path(__file__).resolve().parents[3]
 if str(_ROOT) not in sys.path:
     sys.path.append(str(_ROOT))
+BASE_DIR = _ROOT
 
 from app.core.paths import get_env_path
 
@@ -152,6 +155,109 @@ def _coerce_item_numeric_fields(it: Dict[str, Any]) -> Dict[str, Any]:
             it[k] = _to_float_simple(it.get(k))
     return it
 
+
+def _strip_accents(text: str) -> str:
+    return "".join(
+        ch for ch in unicodedata.normalize("NFD", text or "") if unicodedata.category(ch) != "Mn"
+    )
+
+
+def _norm_key(key: Any) -> str:
+    s = _strip_accents(str(key or "")).lower().strip()
+    s = s.replace("-", "_").replace(" ", "_")
+    s = re.sub(r"[^a-z0-9_]", "", s)
+    s = re.sub(r"_+", "_", s).strip("_")
+    return s
+
+
+def _clean_codigo(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    code = str(value).strip()
+    if not code:
+        return ""
+    code = code.strip(".,;:|")
+    code = re.sub(r"\s+", "", code)
+    if len(code) > 48:
+        return ""
+    # Evita guardar placeholders poco informativos.
+    if code.upper() in {"N/A", "NA", "NULL", "NONE", "SINCODIGO", "S/C"}:
+        return ""
+    return code
+
+
+def _extract_codigo_from_text(text: str) -> str:
+    s = str(text or "").strip()
+    if not s:
+        return ""
+
+    # Ej: "COD: ABC123" | "SKU-XY99" | "ITEM 12345"
+    m = re.search(
+        r"\b(?:COD(?:IGO)?|SKU|ITEM)\s*[:#\-]?\s*([A-Z0-9][A-Z0-9\-./]{1,40})\b",
+        s.upper(),
+    )
+    if m:
+        code = _clean_codigo(m.group(1))
+        if code:
+            return code
+
+    # Ej: "ABC123 - FERTILIZANTE..."
+    m = re.match(r"^\s*([A-Z0-9][A-Z0-9\-./]{2,40})\s*[-|]\s+.+$", s.upper())
+    if m:
+        code = _clean_codigo(m.group(1))
+        if code:
+            return code
+
+    return ""
+
+
+def _extract_codigo_from_item(item: Dict[str, Any]) -> str:
+    # 1) Campo explícito de código, en sus variantes más comunes.
+    for key in (
+        "codigo",
+        "cod",
+        "codigo_producto",
+        "codigo_item",
+        "codigo_articulo",
+        "item_code",
+        "sku",
+    ):
+        if key in item:
+            code = _clean_codigo(item.get(key))
+            if code:
+                return code
+
+    # 2) Fallback: intentar extraer código embebido en descripción.
+    desc = str(item.get("detalle") or item.get("descripcion") or "")
+    return _extract_codigo_from_text(desc)
+
+
+def _normalize_item_fields(it: Dict[str, Any]) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    for raw_k, v in it.items():
+        nk = _norm_key(raw_k)
+        if nk in {"detalle", "descripcion", "descripcion_item", "glosa", "producto"}:
+            if "detalle" not in out:
+                out["detalle"] = str(v or "").strip()
+        elif nk in {"codigo", "cod", "codigo_producto", "codigo_item", "codigo_articulo", "item_code", "sku"}:
+            out["codigo"] = _clean_codigo(v)
+        elif nk in {"cantidad", "unidad", "precio_unitario", "descuento", "impuesto_adicional", "monto_item"}:
+            out[nk] = v
+        else:
+            # Conserva campos no estándar para trazabilidad/debug.
+            out[str(raw_k)] = v
+
+    if "detalle" not in out:
+        out["detalle"] = str(it.get("detalle", it.get("descripcion", "")) or "").strip()
+
+    code = _extract_codigo_from_item(out)
+    if code:
+        out["codigo"] = code
+
+    return out
+
 def analizar_detalle_desde_imagen(image_path: str) -> Dict[str, Any]:
     """EnvÃ­a el recorte de la tabla de Detalle a OpenAI y devuelve JSON con items.
 
@@ -160,6 +266,7 @@ def analizar_detalle_desde_imagen(image_path: str) -> Dict[str, Any]:
     "ok": True,
     "items": [
         {
+            "codigo": str | null,
             "detalle"|"descripcion": str,
             "cantidad": number | str,
             "unidad": str | null,
@@ -220,8 +327,10 @@ def analizar_detalle_desde_imagen(image_path: str) -> Dict[str, Any]:
     )
     user_text = (
         "Extrae filas de la tabla 'Detalle' y normaliza columnas: "
-        "detalle/descripcion, cantidad, precio_unitario, monto_item, unidad (si existe), "
+        "codigo (si existe), detalle/descripcion, cantidad, precio_unitario, monto_item, unidad (si existe), "
         "descuento (si existe), impuesto_adicional (si existe). "
+        "Si hay una columna de codigo/SKU/item, copiala textual en 'codigo'. "
+        "Si el codigo viene al inicio de la descripcion (por ejemplo 'ABC123 - PRODUCTO'), separalo en 'codigo'. "
         "CRÃTICO - Formato de montos: SIEMPRE usa formato chileno estricto: "
         "- Los montos chilenos son ENTEROS (sin decimales) "
         "- Punto (.) ÃšNICAMENTE como separador de miles: 1.000, 25.000, 350.000 "
@@ -280,13 +389,21 @@ def analizar_detalle_desde_imagen(image_path: str) -> Dict[str, Any]:
             keys = list(data.keys()) if isinstance(data, dict) else None
             result = {"ok": True, "items": [], "source": "openai", "reason": "empty_items", "content_keys": keys}
 
-        # Coerciona a float claves numÃ©ricas requeridas sin aplicar fÃ³rmulas
+        # Normaliza claves y coerciona campos numéricos requeridos.
         try:
             items = result.get("items", [])
             if isinstance(items, list):
-                result["items"] = [_coerce_item_numeric_fields(dict(it)) if isinstance(it, dict) else it for it in items]
+                norm_items: List[Any] = []
+                for it in items:
+                    if isinstance(it, dict):
+                        normalized = _normalize_item_fields(dict(it))
+                        normalized = _coerce_item_numeric_fields(normalized)
+                        norm_items.append(normalized)
+                    else:
+                        norm_items.append(it)
+                result["items"] = norm_items
         except Exception:
-            # No bloquear por errores de coerciÃ³n; continuar con items originales
+            # No bloquear por errores de normalización/coerción; continuar con items originales.
             pass
 
         # Guardado opcional en JSON de debug para reproducibilidad (solo si estÃ¡ habilitado)
@@ -715,6 +832,213 @@ def _doc_exists_in_db(id_doc: str, db_path: str) -> bool:
         except Exception:
             pass
 
+
+def _predict_pdf_filename(tipo_doc: str, rut_emisor: str, folio: str) -> str:
+    nombre_pdf = f"{tipo_doc}_{rut_emisor}_{folio}.pdf"
+    return nombre_pdf.replace("/", "_").replace(" ", "_")
+
+
+def _resolve_pdf_path_current_machine(
+    stored_pdf_path: str,
+    *,
+    pdf_dir: Optional[str] = None,
+    tipo_doc: str = "",
+    rut_emisor: str = "",
+    folio: str = "",
+) -> Optional[str]:
+    base_dir_raw = (pdf_dir or os.getenv("RUTA_PDF_DTE_RECIBIDOS") or "").strip()
+    base_dir = Path(base_dir_raw).expanduser() if base_dir_raw else None
+
+    raw = (stored_pdf_path or "").strip()
+    p = Path(raw).expanduser() if raw else None
+
+    candidates: List[Path] = []
+
+    if base_dir and p and p.name:
+        candidates.append(base_dir / p.name)
+    if base_dir and p and not p.is_absolute():
+        candidates.append(base_dir / p)
+    if p:
+        candidates.append(p)
+
+    if base_dir and tipo_doc and rut_emisor and folio:
+        candidates.append(base_dir / _predict_pdf_filename(tipo_doc, rut_emisor, folio))
+
+    seen = set()
+    for c in candidates:
+        key = str(c).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            if c.exists():
+                return str(c.resolve())
+        except Exception:
+            continue
+    return None
+
+
+def backfill_missing_codigo_from_pdfs(
+    db_path: Optional[str] = None,
+    *,
+    pdf_dir: Optional[str] = None,
+    categoria_objetivo: Optional[str] = "INSUMOS_AGRICOLAS",
+    max_docs: int = 0,
+    debug: bool = False,
+) -> Dict[str, Any]:
+    """
+    Rellena detalle.codigo para filas vacías leyendo nuevamente el detalle desde PDF.
+    Por defecto se enfoca en categoria INSUMOS_AGRICOLAS.
+    """
+    db_resolved = db_path or _get_db_path()
+    if not db_resolved or not os.path.isfile(db_resolved):
+        return {"ok": False, "error": f"db_not_found:{db_resolved}"}
+
+    con = sqlite3.connect(db_resolved)
+    con.row_factory = sqlite3.Row
+    try:
+        cur = con.cursor()
+        cols = [r[1] for r in cur.execute("PRAGMA table_info(detalle);").fetchall()]
+        if "codigo" not in cols:
+            cur.execute("ALTER TABLE detalle ADD COLUMN codigo TEXT")
+            con.commit()
+            print("[MIGRATION] Columna detalle.codigo agregada.")
+
+        where_parts = ["(d.codigo IS NULL OR TRIM(d.codigo) = '')"]
+        params: List[Any] = []
+        if categoria_objetivo and categoria_objetivo.upper() != "ALL":
+            where_parts.append("UPPER(TRIM(COALESCE(d.categoria, ''))) = ?")
+            params.append(categoria_objetivo.strip().upper())
+
+        q = f"""
+            SELECT
+                d.id_doc,
+                COUNT(*) AS lineas_sin_codigo,
+                MAX(COALESCE(doc.ruta_pdf, '')) AS ruta_pdf,
+                MAX(COALESCE(doc.tipo_doc, '')) AS tipo_doc,
+                MAX(COALESCE(doc.rut_emisor, '')) AS rut_emisor,
+                MAX(COALESCE(doc.folio, '')) AS folio
+            FROM detalle d
+            LEFT JOIN documentos doc ON doc.id_doc = d.id_doc
+            WHERE {' AND '.join(where_parts)}
+            GROUP BY d.id_doc
+            ORDER BY d.id_doc
+        """
+        if max_docs and max_docs > 0:
+            q += f" LIMIT {int(max_docs)}"
+
+        docs = cur.execute(q, params).fetchall()
+        if not docs:
+            return {
+                "ok": True,
+                "categoria_objetivo": categoria_objetivo or "ALL",
+                "n_docs_objetivo": 0,
+                "n_docs_procesados": 0,
+                "n_docs_con_pdf_faltante": 0,
+                "n_docs_error_ia": 0,
+                "n_filas_codigo_actualizadas": 0,
+            }
+
+        n_docs_procesados = 0
+        n_docs_con_pdf_faltante = 0
+        n_docs_error_ia = 0
+        n_filas_codigo_actualizadas = 0
+
+        for i, d in enumerate(docs, start=1):
+            id_doc = (d["id_doc"] or "").strip()
+            ruta_pdf_db = (d["ruta_pdf"] or "").strip()
+            tipo_doc = (d["tipo_doc"] or "").strip()
+            rut_emisor = (d["rut_emisor"] or "").strip()
+            folio = (d["folio"] or "").strip()
+
+            pdf_path = _resolve_pdf_path_current_machine(
+                ruta_pdf_db,
+                pdf_dir=pdf_dir,
+                tipo_doc=tipo_doc,
+                rut_emisor=rut_emisor,
+                folio=folio,
+            )
+            if not pdf_path:
+                n_docs_con_pdf_faltante += 1
+                print(f"[BACKFILL-CODIGO][SKIP] PDF no encontrado para {id_doc}")
+                continue
+
+            print(
+                f"[BACKFILL-CODIGO] ({i}/{len(docs)}) Leyendo detalle de {id_doc} "
+                f"(faltantes={int(d['lineas_sin_codigo'] or 0)})"
+            )
+
+            img_path = _rasterize_first_page(pdf_path)
+            if not img_path:
+                n_docs_error_ia += 1
+                print(f"[BACKFILL-CODIGO][ERROR] No se pudo rasterizar PDF: {pdf_path}")
+                continue
+
+            try:
+                det_ai = analizar_detalle_desde_imagen(img_path)
+                if not det_ai.get("ok"):
+                    n_docs_error_ia += 1
+                    print(f"[BACKFILL-CODIGO][ERROR] IA detalle fallo para {id_doc}: {det_ai.get('error')}")
+                    continue
+
+                items = det_ai.get("items", [])
+                if not isinstance(items, list) or not items:
+                    print(f"[BACKFILL-CODIGO][WARN] Sin items IA para {id_doc}.")
+                    continue
+
+                updated_doc = 0
+                for linea, it in enumerate(items, start=1):
+                    if not isinstance(it, dict):
+                        continue
+                    item_norm = _normalize_item_fields(dict(it))
+                    code = _extract_codigo_from_item(item_norm)
+                    if not code:
+                        continue
+                    r_upd = cur.execute(
+                        """
+                        UPDATE detalle
+                        SET codigo = ?
+                        WHERE id_doc = ?
+                          AND linea = ?
+                          AND (codigo IS NULL OR TRIM(codigo) = '')
+                        """,
+                        (code, id_doc, linea),
+                    )
+                    if r_upd.rowcount and r_upd.rowcount > 0:
+                        updated_doc += int(r_upd.rowcount)
+
+                if updated_doc > 0:
+                    con.commit()
+                    n_filas_codigo_actualizadas += updated_doc
+                    print(f"[BACKFILL-CODIGO][OK] {id_doc}: {updated_doc} fila(s) actualizada(s).")
+                elif debug:
+                    print(f"[BACKFILL-CODIGO][DEBUG] {id_doc}: sin cambios.")
+
+                n_docs_procesados += 1
+            finally:
+                try:
+                    if img_path and os.path.exists(img_path):
+                        os.remove(img_path)
+                except Exception:
+                    pass
+
+        return {
+            "ok": True,
+            "categoria_objetivo": categoria_objetivo or "ALL",
+            "n_docs_objetivo": len(docs),
+            "n_docs_procesados": n_docs_procesados,
+            "n_docs_con_pdf_faltante": n_docs_con_pdf_faltante,
+            "n_docs_error_ia": n_docs_error_ia,
+            "n_filas_codigo_actualizadas": n_filas_codigo_actualizadas,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
@@ -722,17 +1046,44 @@ if __name__ == "__main__":
     parser.add_argument("--dir")
     parser.add_argument("--all", action="store_true")
     parser.add_argument("--debug", action="store_true")
+    parser.add_argument(
+        "--backfill-codigo",
+        action="store_true",
+        help="Rellena detalle.codigo releeyendo PDFs para filas con codigo vacio.",
+    )
+    parser.add_argument(
+        "--categoria",
+        default="INSUMOS_AGRICOLAS",
+        help="Categoria objetivo para --backfill-codigo (usa ALL para sin filtro).",
+    )
+    parser.add_argument(
+        "--max-docs",
+        type=int,
+        default=0,
+        help="Limite de documentos a procesar en --backfill-codigo (0 = sin limite).",
+    )
     args = parser.parse_args()
-    targets = _collect_target_files(args.file, args.dir)
-
-    if not targets:
-        print("No se encontraron PDFs para procesar.")
-        sys.exit(1)
 
     db_path = _get_db_path()
     if not os.path.isfile(db_path):
         print(f"DB no encontrada en: {db_path}")
-        print("Revisa RUTA_DB_DTE_RECIBIDOS en config.env o que el archivo exista.")
+        print("Revisa DB_PATH_DTE_RECIBIDOS en config.env o que el archivo exista.")
+        sys.exit(1)
+
+    if args.backfill_codigo:
+        result = backfill_missing_codigo_from_pdfs(
+            db_path=db_path,
+            pdf_dir=args.dir,
+            categoria_objetivo=args.categoria,
+            max_docs=args.max_docs,
+            debug=args.debug,
+        )
+        print(f"[BACKFILL-CODIGO] {result}")
+        sys.exit(0 if result.get("ok") else 1)
+
+    targets = _collect_target_files(args.file, args.dir)
+    if not targets:
+        print("No se encontraron PDFs para procesar.")
         sys.exit(1)
 
     for i, pdf in enumerate(targets):
@@ -740,9 +1091,9 @@ if __name__ == "__main__":
         tipo_fn, rut_fn, folio_fn = _infer_from_filename(pdf)
         id_doc = DL.build_id_doc(tipo_fn, rut_fn, folio_fn)
 
-        # âœ… 1) Si ya existe en DB â†’ saltar
+        # Si ya existe en DB -> saltar
         if _doc_exists_in_db(id_doc, db_path):
-            print(f"\nYa existe en DB â†’ {id_doc} (skip) [{i+1}/{len(targets)}]")
+            print(f"\nYa existe en DB -> {id_doc} (skip) [{i+1}/{len(targets)}]")
             continue
 
         print(f"\nIA leyendo ({i+1}/{len(targets)}): {pdf}")
@@ -760,7 +1111,7 @@ if __name__ == "__main__":
             res = read_one_pdf_with_ai(pdf, debug=args.debug)
 
             if res.get("ok"):
-                print(f"Guardado en BD: {res.get('doc_id')} - Ã­tems: {len(res.get('items', []))}")
+                print(f"Guardado en BD: {res.get('doc_id')} - items: {len(res.get('items', []))}")
                 success = True
             else:
                 print(f"Error: {res.get('error')}")
@@ -770,7 +1121,7 @@ if __name__ == "__main__":
                     time.sleep(wait)
 
         if not success:
-            print(f"No se pudo procesar despuÃ©s de {max_retries} intentos â†’ {pdf}")
+            print(f"No se pudo procesar despues de {max_retries} intentos -> {pdf}")
 
         # throttle para evitar rate limits
         time.sleep(1.2)
