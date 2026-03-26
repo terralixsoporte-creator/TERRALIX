@@ -2538,6 +2538,13 @@ def _get_purchase_entries_for_export(db_path: str) -> List[Dict[str, Any]]:
         con.close()
 
 
+def get_purchase_entries_for_export(db_path: str) -> List[Dict[str, Any]]:
+    """
+    Filas de entradas de compra para exportes consolidados.
+    """
+    return _get_purchase_entries_for_export(db_path)
+
+
 def export_stock_to_excel(db_path: str, output_path: str) -> Dict[str, Any]:
     try:
         from openpyxl import Workbook
@@ -2545,7 +2552,7 @@ def export_stock_to_excel(db_path: str, output_path: str) -> Dict[str, Any]:
         return {"ok": False, "error": "Falta la dependencia openpyxl para exportar Excel."}
 
     rows = get_stock_summary(db_path=db_path, search_text="", limit=200000)
-    entries_rows = _get_purchase_entries_for_export(db_path=db_path)
+    entries_rows = get_purchase_entries_for_export(db_path=db_path)
 
     wb = Workbook()
     ws = wb.active

@@ -11,6 +11,8 @@ El Excel tiene:
   - Hoja "detalle": filas editables con dropdowns de categoría
   - Hoja "catalogo": referencia de combinaciones válidas
   - Hoja "documentos": datos de documentos (solo lectura)
+  - Hoja "stock": resumen de inventario actual por código
+  - Hoja "entradas": historial de entradas de compra para gestión de precios
   - Las filas SIN_CLASIFICAR y needs_review=1 se resaltan en amarillo/naranja
 """
 
@@ -260,6 +262,79 @@ def preview_non_category_edits(
     }
 
 
+def _append_inventory_sheets(wb: Workbook, db_path: str) -> Tuple[int, int]:
+    """
+    Agrega hojas de inventario (`stock`, `entradas`) al workbook de exportación.
+    """
+    from app.core.DTE_Recibidos import inventory as INV
+
+    stock_rows = INV.get_stock_summary(db_path=db_path, search_text="", limit=200000)
+    entry_rows = INV.get_purchase_entries_for_export(db_path=db_path)
+
+    # Hoja STOCK
+    ws_stock = wb.create_sheet("stock")
+    stock_headers = [
+        "codigo",
+        "descripcion_estandar",
+        "unidad_base",
+        "categoria",
+        "tipo",
+        "entradas",
+        "salidas",
+        "stock_actual",
+        "ultima_fecha",
+        "ultima_modificacion_tipo",
+    ]
+    for col_idx, header in enumerate(stock_headers, 1):
+        cell = ws_stock.cell(row=1, column=col_idx, value=header)
+        cell.fill = _HEADER_FILL
+        cell.font = _HEADER_FONT
+        cell.border = _THIN_BORDER
+
+    for row_idx, row in enumerate(stock_rows, 2):
+        for col_idx, col_name in enumerate(stock_headers, 1):
+            cell = ws_stock.cell(row=row_idx, column=col_idx, value=row.get(col_name, ""))
+            cell.border = _THIN_BORDER
+    ws_stock.freeze_panes = "A2"
+
+    # Hoja ENTRADAS
+    ws_entries = wb.create_sheet("entradas")
+    entries_headers = [
+        "movimiento_id",
+        "fecha",
+        "codigo",
+        "descripcion_estandar",
+        "categoria",
+        "tipo",
+        "cantidad_entrada",
+        "unidad_movimiento",
+        "id_doc",
+        "linea",
+        "proveedor",
+        "rut_emisor",
+        "descripcion_dte_original",
+        "cantidad_dte",
+        "unidad_dte",
+        "precio_unitario_dte",
+        "monto_item_dte",
+        "precio_unitario_calculado",
+        "referencia_detalle",
+    ]
+    for col_idx, header in enumerate(entries_headers, 1):
+        cell = ws_entries.cell(row=1, column=col_idx, value=header)
+        cell.fill = _HEADER_FILL
+        cell.font = _HEADER_FONT
+        cell.border = _THIN_BORDER
+
+    for row_idx, row in enumerate(entry_rows, 2):
+        for col_idx, col_name in enumerate(entries_headers, 1):
+            cell = ws_entries.cell(row=row_idx, column=col_idx, value=row.get(col_name, ""))
+            cell.border = _THIN_BORDER
+    ws_entries.freeze_panes = "A2"
+
+    return len(stock_rows), len(entry_rows)
+
+
 # =============================================================================
 # EXPORTAR
 # =============================================================================
@@ -445,6 +520,9 @@ def export_to_excel(
             cell.border = _THIN_BORDER
     ws_doc.freeze_panes = "A2"
 
+    # Hojas de inventario (stock + entradas)
+    n_stock, n_entradas = _append_inventory_sheets(wb, db_path)
+
     # Guardar
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     wb.save(output_path)
@@ -454,6 +532,8 @@ def export_to_excel(
         "n_rows": len(detalle_rows),
         "n_catalogo": len(catalogo),
         "n_documentos": len(doc_rows),
+        "n_stock": n_stock,
+        "n_entradas": n_entradas,
         "path": output_path,
     }
 

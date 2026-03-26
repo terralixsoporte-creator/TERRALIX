@@ -755,6 +755,8 @@ No cierres esta ventana hasta que termine.
                     print(f"  Filas detalle: {result['n_rows']}")
                     print(f"  Catalogo: {result['n_catalogo']} combinaciones")
                     print(f"  Documentos: {result['n_documentos']}")
+                    print(f"  Stock: {result.get('n_stock', 0)} filas")
+                    print(f"  Entradas: {result.get('n_entradas', 0)} filas")
                     print("\n  Filas AMARILLAS = necesitan revision")
                     print("  Filas ROJAS = sin clasificar")
                     print("\n  Edita las columnas 'categoria', 'subcategoria', 'tipo_gasto'")

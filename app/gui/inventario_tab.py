@@ -5,9 +5,8 @@ from __future__ import annotations
 import os
 import threading
 from datetime import date, datetime
-from pathlib import Path
 import tkinter as tk
-from tkinter import Frame, filedialog, messagebox
+from tkinter import Frame, messagebox
 from tkinter import ttk
 from typing import Any
 
@@ -48,18 +47,16 @@ def create_inventory_tab(parent):
 
     top = ttk.Frame(container)
     top.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 8))
-    top.columnconfigure(3, weight=1)
+    top.columnconfigure(2, weight=1)
 
     btn_refresh = ttk.Button(top, text="Refrescar")
-    btn_export = ttk.Button(top, text="Exportar Stock")
 
     btn_refresh.grid(row=0, column=0, padx=(0, 6), sticky="w")
-    btn_export.grid(row=0, column=1, padx=(0, 10), sticky="w")
 
     search_var = tk.StringVar(value="")
-    ttk.Label(top, text="Buscar:").grid(row=0, column=2, padx=(0, 6), sticky="w")
+    ttk.Label(top, text="Buscar:").grid(row=0, column=1, padx=(0, 6), sticky="w")
     search_entry = ttk.Entry(top, textvariable=search_var)
-    search_entry.grid(row=0, column=3, sticky="ew")
+    search_entry.grid(row=0, column=2, sticky="ew")
 
     left = ttk.LabelFrame(container, text="Registrar uso", padding=10)
     left.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
@@ -146,7 +143,7 @@ def create_inventory_tab(parent):
 
     def run_async(start_msg: str, worker_fn, on_done=None):
         log(start_msg)
-        for b in (btn_refresh, btn_export, btn_register):
+        for b in (btn_refresh, btn_register):
             b.configure(state="disabled")
 
         def _worker():
@@ -156,14 +153,14 @@ def create_inventory_tab(parent):
                 def _finish_ok():
                     if on_done:
                         on_done(result)
-                    for b in (btn_refresh, btn_export, btn_register):
+                    for b in (btn_refresh, btn_register):
                         b.configure(state="normal")
 
                 frame.after(0, _finish_ok)
             except Exception as e:
                 def _finish_err():
                     log(f"[ERROR] {e}")
-                    for b in (btn_refresh, btn_export, btn_register):
+                    for b in (btn_refresh, btn_register):
                         b.configure(state="normal")
 
                 frame.after(0, _finish_err)
@@ -525,42 +522,7 @@ def create_inventory_tab(parent):
 
         run_async("[MOV] Registrando uso manual...", _worker, _done)
 
-    def export_stock_excel() -> None:
-        try:
-            db = _db_path()
-        except Exception as e:
-            messagebox.showerror("Inventario", str(e))
-            return
-
-        default_dir = Path(db).resolve().parent
-        default_name = "inventario_actual.xlsx"
-        output_path = filedialog.asksaveasfilename(
-            title="Exportar stock teorico",
-            initialdir=str(default_dir),
-            initialfile=default_name,
-            defaultextension=".xlsx",
-            filetypes=[("Excel", "*.xlsx")],
-        )
-        if not output_path:
-            return
-
-        def _worker():
-            return INV.export_stock_to_excel(db, output_path)
-
-        def _done(res):
-            if not res.get("ok"):
-                log(f"[ERROR] No se pudo exportar stock.")
-                return
-            log(
-                "[OK] Stock exportado: "
-                f"{res.get('path')} "
-                f"(stock={res.get('n_rows', 0)} filas, entradas={res.get('n_entries_rows', 0)} filas)"
-            )
-
-        run_async("[EXPORT] Exportando stock a Excel...", _worker, _done)
-
     btn_refresh.configure(command=sync_from_dte)
-    btn_export.configure(command=export_stock_excel)
     btn_register.configure(command=register_usage)
     combo_code.bind("<<ComboboxSelected>>", _refresh_selected_info)
     combo_code.bind("<KeyRelease>", _refresh_selected_info)
