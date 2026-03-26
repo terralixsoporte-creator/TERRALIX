@@ -13,7 +13,7 @@ import os
 import re
 import sqlite3
 import unicodedata
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -26,6 +26,7 @@ _NON_FIELD_TYPES = {
     "NO INVENTARIABLE",
     "INFRAESTRUCTURA",
 }
+_APP_STATUSES = {"PROGRAMADA", "EJECUTADA", "CANCELADA"}
 
 
 def _clean_path(path_value: str) -> str:
@@ -168,6 +169,24 @@ def _parse_date_iso_strict(value: Any) -> Optional[str]:
     return None
 
 
+def _normalize_application_status(value: Any) -> str:
+    raw = _normalize_text(value).upper()
+    aliases = {
+        "": "PROGRAMADA",
+        "P": "PROGRAMADA",
+        "PROGRAMADA": "PROGRAMADA",
+        "PROG": "PROGRAMADA",
+        "E": "EJECUTADA",
+        "EJECUTADA": "EJECUTADA",
+        "REALIZADA": "EJECUTADA",
+        "COMPLETADA": "EJECUTADA",
+        "C": "CANCELADA",
+        "CANCELADA": "CANCELADA",
+        "ANULADA": "CANCELADA",
+    }
+    return aliases.get(raw, raw)
+
+
 def _connect(db_path: str) -> sqlite3.Connection:
     con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row
@@ -239,6 +258,55 @@ def ensure_inventory_schema(db_path: str) -> None:
         )
         _add_column_if_missing(con, "inventario_catalogo", "ultima_fecha_override", "TEXT")
         _add_column_if_missing(con, "inventario_catalogo", "ultima_tipo_override", "TEXT")
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS aplicaciones_campo (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                titulo TEXT NOT NULL,
+                descripcion TEXT,
+                fecha_programada TEXT NOT NULL,
+                fecha_ejecucion TEXT,
+                estado TEXT NOT NULL DEFAULT 'PROGRAMADA',
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+            """
+        )
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS aplicaciones_campo_productos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                aplicacion_id INTEGER NOT NULL,
+                codigo TEXT NOT NULL,
+                cantidad REAL NOT NULL,
+                unidad TEXT,
+                observacion TEXT,
+                movimiento_id INTEGER,
+                created_at TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (aplicacion_id) REFERENCES aplicaciones_campo(id),
+                FOREIGN KEY (codigo) REFERENCES inventario_catalogo(codigo),
+                FOREIGN KEY (movimiento_id) REFERENCES inventario_movimientos(id)
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_app_campo_fecha_estado ON aplicaciones_campo(fecha_programada, estado)"
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_app_prod_aplicacion ON aplicaciones_campo_productos(aplicacion_id)"
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_app_prod_movimiento ON aplicaciones_campo_productos(movimiento_id)"
+        )
+        _add_column_if_missing(con, "aplicaciones_campo", "titulo", "TEXT")
+        _add_column_if_missing(con, "aplicaciones_campo", "descripcion", "TEXT")
+        _add_column_if_missing(con, "aplicaciones_campo", "fecha_programada", "TEXT")
+        _add_column_if_missing(con, "aplicaciones_campo", "fecha_ejecucion", "TEXT")
+        _add_column_if_missing(con, "aplicaciones_campo", "estado", "TEXT")
+        _add_column_if_missing(con, "aplicaciones_campo", "updated_at", "TEXT")
+        _add_column_if_missing(con, "aplicaciones_campo_productos", "unidad", "TEXT")
+        _add_column_if_missing(con, "aplicaciones_campo_productos", "observacion", "TEXT")
+        _add_column_if_missing(con, "aplicaciones_campo_productos", "movimiento_id", "INTEGER")
         _purge_ignored_codes_in_connection(con)
         con.commit()
     finally:
@@ -849,16 +917,17 @@ def _stock_for_code(con: sqlite3.Connection, codigo: str) -> float:
     return float(row["stock"] if row else 0.0)
 
 
-def register_usage(
-    db_path: str,
+def _register_usage_in_connection(
+    con: sqlite3.Connection,
     codigo: str,
     cantidad: float,
     fecha_uso: Any,
     observacion: str = "",
     unidad: str = "",
     allow_negative: bool = False,
+    fuente: str = "MANUAL_USO",
+    referencia: Optional[str] = None,
 ) -> Dict[str, Any]:
-    ensure_inventory_schema(db_path)
     codigo_norm = _normalize_code(codigo)
     if not _is_valid_inventory_code(codigo_norm):
         return {"ok": False, "error": "Codigo invalido para inventario (vacio o '-')."}
@@ -871,52 +940,90 @@ def register_usage(
     obs = _normalize_text(observacion)
     um = _normalize_text(unidad).upper()
 
-    con = _connect(db_path)
-    try:
-        cat = con.execute(
-            "SELECT codigo, unidad_base FROM inventario_catalogo WHERE codigo = ?",
-            (codigo_norm,),
-        ).fetchone()
-        if cat is None:
-            con.execute(
-                """
-                INSERT INTO inventario_catalogo
-                (codigo, descripcion_estandar, unidad_base, categoria, tipo, ocurrencias, variaciones, activo, fuente, updated_at)
-                VALUES (?, '', ?, '', '', 0, 'NO', 1, 'MANUAL_USO', datetime('now'))
-                """,
-                (codigo_norm, um),
-            )
-            unidad_final = um
-        else:
-            unidad_final = um or _normalize_text(cat["unidad_base"]).upper()
-
-        stock_before = _stock_for_code(con, codigo_norm)
-        stock_after = stock_before - qty
-        if stock_after < 0 and not allow_negative:
-            return {
-                "ok": False,
-                "error": "El movimiento deja stock negativo.",
-                "stock_before": stock_before,
-                "stock_after": stock_after,
-            }
-
-        cur = con.execute(
+    cat = con.execute(
+        "SELECT codigo, unidad_base FROM inventario_catalogo WHERE codigo = ?",
+        (codigo_norm,),
+    ).fetchone()
+    if cat is None:
+        con.execute(
             """
-            INSERT INTO inventario_movimientos
-            (codigo, fecha, tipo_mov, cantidad, unidad, signo, fuente, referencia, observacion, source_hash)
-            VALUES (?, ?, 'SALIDA_USO', ?, ?, -1, 'MANUAL_USO', NULL, ?, NULL)
+            INSERT INTO inventario_catalogo
+            (codigo, descripcion_estandar, unidad_base, categoria, tipo, ocurrencias, variaciones, activo, fuente, updated_at)
+            VALUES (?, '', ?, '', '', 0, 'NO', 1, ?, datetime('now'))
             """,
-            (codigo_norm, fecha, qty, unidad_final, obs),
+            (codigo_norm, um, fuente),
         )
-        con.commit()
+        unidad_final = um
+    else:
+        unidad_final = um or _normalize_text(cat["unidad_base"]).upper()
 
+    stock_before = _stock_for_code(con, codigo_norm)
+    stock_after = stock_before - qty
+    if stock_after < 0 and not allow_negative:
         return {
-            "ok": True,
-            "movement_id": cur.lastrowid,
-            "codigo": codigo_norm,
+            "ok": False,
+            "error": "El movimiento deja stock negativo.",
             "stock_before": stock_before,
             "stock_after": stock_after,
+            "codigo": codigo_norm,
         }
+
+    cur = con.execute(
+        """
+        INSERT INTO inventario_movimientos
+        (codigo, fecha, tipo_mov, cantidad, unidad, signo, fuente, referencia, observacion, source_hash)
+        VALUES (?, ?, 'SALIDA_USO', ?, ?, -1, ?, ?, ?, NULL)
+        """,
+        (
+            codigo_norm,
+            fecha,
+            qty,
+            unidad_final,
+            _normalize_text(fuente) or "MANUAL_USO",
+            _normalize_text(referencia) or None,
+            obs,
+        ),
+    )
+
+    return {
+        "ok": True,
+        "movement_id": cur.lastrowid,
+        "codigo": codigo_norm,
+        "cantidad": qty,
+        "stock_before": stock_before,
+        "stock_after": stock_after,
+        "unidad": unidad_final,
+        "fecha": fecha,
+    }
+
+
+def register_usage(
+    db_path: str,
+    codigo: str,
+    cantidad: float,
+    fecha_uso: Any,
+    observacion: str = "",
+    unidad: str = "",
+    allow_negative: bool = False,
+) -> Dict[str, Any]:
+    ensure_inventory_schema(db_path)
+    con = _connect(db_path)
+    try:
+        result = _register_usage_in_connection(
+            con=con,
+            codigo=codigo,
+            cantidad=cantidad,
+            fecha_uso=fecha_uso,
+            observacion=observacion,
+            unidad=unidad,
+            allow_negative=allow_negative,
+            fuente="MANUAL_USO",
+            referencia=None,
+        )
+        if not result.get("ok"):
+            return result
+        con.commit()
+        return result
     finally:
         con.close()
 

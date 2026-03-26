@@ -534,7 +534,7 @@ def create_inventory_tab(parent):
             return
 
         default_dir = Path(db).resolve().parent
-        default_name = f"inventario_stock_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        default_name = "inventario_actual.xlsx"
         output_path = filedialog.asksaveasfilename(
             title="Exportar stock teorico",
             initialdir=str(default_dir),
