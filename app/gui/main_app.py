@@ -61,6 +61,7 @@ def _open_manual():
 def open_main_app(login_window: Tk | None):
     """Convierte la ventana de login en la ventana principal de Terralix."""
     from app.gui.actualizar_base_de_datos import create_update_tab
+    from app.gui.aplicaciones_tab import create_applications_tab
     from app.gui.inventario_tab import create_inventory_tab
 
     root = login_window if login_window is not None else Tk()
@@ -105,6 +106,8 @@ def open_main_app(login_window: Tk | None):
     notebook.add(actualizar_tab, text="Actualizar")
     inventario_tab = create_inventory_tab(notebook)
     notebook.add(inventario_tab, text="Inventario")
+    aplicaciones_tab = create_applications_tab(notebook)
+    notebook.add(aplicaciones_tab, text="Aplicaciones")
     notebook.select(actualizar_tab)
 
     menubar = tk.Menu(root)
@@ -126,6 +129,13 @@ def open_main_app(login_window: Tk | None):
         command=lambda: inventario_tab.run_inventory_refresh(),
     )
     menubar.add_cascade(label="Inventario", menu=inventario_menu)
+
+    aplicaciones_menu = tk.Menu(menubar, tearoff=0)
+    aplicaciones_menu.add_command(
+        label="Refrescar Aplicaciones",
+        command=lambda: aplicaciones_tab.run_applications_refresh(),
+    )
+    menubar.add_cascade(label="Aplicaciones", menu=aplicaciones_menu)
 
     opciones_menu = tk.Menu(menubar, tearoff=0)
     opciones_menu.add_command(

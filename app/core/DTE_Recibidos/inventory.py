@@ -1458,6 +1458,482 @@ def get_stock_for_code(db_path: str, codigo: str) -> float:
         con.close()
 
 
+def _month_date_bounds(year: int, month: int) -> tuple[str, str]:
+    y = int(year)
+    m = int(month)
+    if m < 1 or m > 12:
+        raise ValueError("Mes invalido. Debe estar entre 1 y 12.")
+    start = date(y, m, 1)
+    next_month = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    end = next_month - timedelta(days=1)
+    return start.isoformat(), end.isoformat()
+
+
+def _normalize_application_products(
+    productos: Optional[List[Dict[str, Any]]],
+) -> Dict[str, Any]:
+    normalized: List[Dict[str, Any]] = []
+    for idx, raw in enumerate(productos or [], start=1):
+        if not isinstance(raw, dict):
+            return {"ok": False, "error": f"Producto #{idx} invalido."}
+
+        codigo = _normalize_code(raw.get("codigo"))
+        if not _is_valid_inventory_code(codigo):
+            return {"ok": False, "error": f"Codigo invalido en producto #{idx}."}
+
+        cantidad = _to_float(raw.get("cantidad"))
+        if cantidad <= 0:
+            return {"ok": False, "error": f"Cantidad invalida en producto #{idx}."}
+
+        normalized.append(
+            {
+                "codigo": codigo,
+                "cantidad": cantidad,
+                "unidad": _normalize_text(raw.get("unidad")).upper(),
+                "observacion": _normalize_text(raw.get("observacion")),
+            }
+        )
+    return {"ok": True, "products": normalized}
+
+
+def create_field_application(
+    db_path: str,
+    titulo: str,
+    fecha_programada: Any,
+    descripcion: str = "",
+    estado: str = "PROGRAMADA",
+    productos: Optional[List[Dict[str, Any]]] = None,
+    registrar_salidas: bool = False,
+    fecha_ejecucion: Any = None,
+    allow_negative: bool = False,
+) -> Dict[str, Any]:
+    ensure_inventory_schema(db_path)
+
+    titulo_norm = _normalize_text(titulo)
+    if not titulo_norm:
+        return {"ok": False, "error": "Debes ingresar un titulo para la aplicacion."}
+
+    fecha_prog = _parse_date_iso_strict(fecha_programada)
+    if not fecha_prog:
+        return {"ok": False, "error": "Fecha programada invalida. Usa YYYY-MM-DD."}
+
+    estado_norm = _normalize_application_status(estado)
+    if estado_norm not in _APP_STATUSES:
+        return {"ok": False, "error": f"Estado invalido: {estado}"}
+
+    normalized_products = _normalize_application_products(productos)
+    if not normalized_products.get("ok"):
+        return normalized_products
+
+    fecha_ejec_iso: Optional[str] = None
+    if estado_norm == "EJECUTADA":
+        fecha_ejec_iso = _parse_date_iso_strict(fecha_ejecucion) if fecha_ejecucion else fecha_prog
+        if not fecha_ejec_iso:
+            return {"ok": False, "error": "Fecha de ejecucion invalida. Usa YYYY-MM-DD."}
+    else:
+        registrar_salidas = False
+
+    con = _connect(db_path)
+    try:
+        cur = con.execute(
+            """
+            INSERT INTO aplicaciones_campo
+            (titulo, descripcion, fecha_programada, fecha_ejecucion, estado, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+            """,
+            (
+                titulo_norm,
+                _normalize_text(descripcion),
+                fecha_prog,
+                fecha_ejec_iso,
+                estado_norm,
+            ),
+        )
+        app_id = int(cur.lastrowid or 0)
+        movements_created = 0
+
+        for p in normalized_products["products"]:
+            movement_id = None
+            if registrar_salidas:
+                usage_obs = f"APLICACION_CAMPO #{app_id} - {titulo_norm}"
+                if p["observacion"]:
+                    usage_obs = f"{usage_obs} | {p['observacion']}"
+                usage = _register_usage_in_connection(
+                    con=con,
+                    codigo=p["codigo"],
+                    cantidad=p["cantidad"],
+                    fecha_uso=fecha_ejec_iso or fecha_prog,
+                    observacion=usage_obs,
+                    unidad=p["unidad"],
+                    allow_negative=allow_negative,
+                    fuente="APLICACION_CAMPO",
+                    referencia=f"APP:{app_id}",
+                )
+                if not usage.get("ok"):
+                    con.rollback()
+                    return {
+                        "ok": False,
+                        "error": usage.get("error", "No se pudo registrar salida de inventario."),
+                        "codigo": usage.get("codigo", p["codigo"]),
+                        "application_id": app_id,
+                    }
+                movement_id = int(usage.get("movement_id", 0) or 0) or None
+                movements_created += 1
+
+            con.execute(
+                """
+                INSERT INTO aplicaciones_campo_productos
+                (aplicacion_id, codigo, cantidad, unidad, observacion, movimiento_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+                """,
+                (
+                    app_id,
+                    p["codigo"],
+                    p["cantidad"],
+                    p["unidad"],
+                    p["observacion"],
+                    movement_id,
+                ),
+            )
+
+        con.commit()
+        return {
+            "ok": True,
+            "application_id": app_id,
+            "estado": estado_norm,
+            "products_count": len(normalized_products["products"]),
+            "movements_created": movements_created,
+            "fecha_programada": fecha_prog,
+            "fecha_ejecucion": fecha_ejec_iso,
+        }
+    finally:
+        con.close()
+
+
+def list_field_applications(
+    db_path: str,
+    date_from: Any = None,
+    date_to: Any = None,
+    status: str = "",
+    search_text: str = "",
+    limit: int = 2000,
+) -> List[Dict[str, Any]]:
+    ensure_inventory_schema(db_path)
+    status_norm = _normalize_application_status(status) if _normalize_text(status) else ""
+    if status_norm and status_norm not in _APP_STATUSES:
+        status_norm = ""
+
+    date_from_iso = _parse_date_iso_strict(date_from) if _normalize_text(date_from) else ""
+    date_to_iso = _parse_date_iso_strict(date_to) if _normalize_text(date_to) else ""
+    search_norm = _normalize_text(search_text).upper()
+    like_value = f"%{search_norm}%"
+
+    con = _connect(db_path)
+    try:
+        rows = con.execute(
+            """
+            SELECT
+                a.id,
+                a.titulo,
+                COALESCE(a.descripcion, '') AS descripcion,
+                a.fecha_programada,
+                COALESCE(a.fecha_ejecucion, '') AS fecha_ejecucion,
+                UPPER(TRIM(COALESCE(a.estado, 'PROGRAMADA'))) AS estado,
+                COALESCE(COUNT(p.id), 0) AS productos_total,
+                COALESCE(SUM(CASE WHEN p.movimiento_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS productos_con_salida
+            FROM aplicaciones_campo a
+            LEFT JOIN aplicaciones_campo_productos p
+              ON p.aplicacion_id = a.id
+            WHERE (? = '' OR UPPER(TRIM(COALESCE(a.estado, 'PROGRAMADA'))) = ?)
+              AND (? = '' OR a.fecha_programada >= ?)
+              AND (? = '' OR a.fecha_programada <= ?)
+              AND (
+                    (? = '')
+                 OR UPPER(COALESCE(a.titulo, '')) LIKE ?
+                 OR UPPER(COALESCE(a.descripcion, '')) LIKE ?
+              )
+            GROUP BY
+                a.id, a.titulo, a.descripcion, a.fecha_programada, a.fecha_ejecucion, a.estado
+            ORDER BY a.fecha_programada ASC, a.id ASC
+            LIMIT ?
+            """,
+            (
+                status_norm,
+                status_norm,
+                date_from_iso or "",
+                date_from_iso or "",
+                date_to_iso or "",
+                date_to_iso or "",
+                search_norm,
+                like_value,
+                like_value,
+                max(1, int(limit)),
+            ),
+        ).fetchall()
+        return [
+            {
+                "id": int(r["id"]),
+                "titulo": r["titulo"] or "",
+                "descripcion": r["descripcion"] or "",
+                "fecha_programada": r["fecha_programada"] or "",
+                "fecha_ejecucion": r["fecha_ejecucion"] or "",
+                "estado": (r["estado"] or "PROGRAMADA").upper(),
+                "productos_total": int(r["productos_total"] or 0),
+                "productos_con_salida": int(r["productos_con_salida"] or 0),
+            }
+            for r in rows
+        ]
+    finally:
+        con.close()
+
+
+def list_field_application_products(db_path: str, application_id: int) -> List[Dict[str, Any]]:
+    ensure_inventory_schema(db_path)
+    app_id = int(application_id or 0)
+    if app_id <= 0:
+        return []
+
+    con = _connect(db_path)
+    try:
+        rows = con.execute(
+            """
+            SELECT
+                p.id,
+                p.aplicacion_id,
+                p.codigo,
+                COALESCE(c.descripcion_estandar, '') AS descripcion_estandar,
+                p.cantidad,
+                COALESCE(p.unidad, '') AS unidad,
+                COALESCE(p.observacion, '') AS observacion,
+                p.movimiento_id,
+                COALESCE(m.fecha, '') AS fecha_movimiento
+            FROM aplicaciones_campo_productos p
+            LEFT JOIN inventario_catalogo c
+              ON c.codigo = p.codigo
+            LEFT JOIN inventario_movimientos m
+              ON m.id = p.movimiento_id
+            WHERE p.aplicacion_id = ?
+            ORDER BY p.id ASC
+            """,
+            (app_id,),
+        ).fetchall()
+        return [
+            {
+                "id": int(r["id"]),
+                "aplicacion_id": int(r["aplicacion_id"]),
+                "codigo": r["codigo"] or "",
+                "descripcion_estandar": r["descripcion_estandar"] or "",
+                "cantidad": float(r["cantidad"] or 0),
+                "unidad": r["unidad"] or "",
+                "observacion": r["observacion"] or "",
+                "movimiento_id": int(r["movimiento_id"] or 0) if r["movimiento_id"] is not None else None,
+                "fecha_movimiento": r["fecha_movimiento"] or "",
+            }
+            for r in rows
+        ]
+    finally:
+        con.close()
+
+
+def execute_field_application(
+    db_path: str,
+    application_id: int,
+    fecha_ejecucion: Any = None,
+    registrar_salidas: bool = True,
+    allow_negative: bool = False,
+) -> Dict[str, Any]:
+    ensure_inventory_schema(db_path)
+    app_id = int(application_id or 0)
+    if app_id <= 0:
+        return {"ok": False, "error": "ID de aplicacion invalido."}
+
+    fecha_exec = _parse_date_iso_strict(fecha_ejecucion) if fecha_ejecucion else date.today().isoformat()
+    if not fecha_exec:
+        return {"ok": False, "error": "Fecha de ejecucion invalida. Usa YYYY-MM-DD."}
+
+    con = _connect(db_path)
+    try:
+        app = con.execute(
+            """
+            SELECT id, titulo, fecha_programada, estado
+            FROM aplicaciones_campo
+            WHERE id = ?
+            """,
+            (app_id,),
+        ).fetchone()
+        if app is None:
+            return {"ok": False, "error": f"No existe la aplicacion #{app_id}."}
+
+        products = con.execute(
+            """
+            SELECT id, codigo, cantidad, unidad, observacion, movimiento_id
+            FROM aplicaciones_campo_productos
+            WHERE aplicacion_id = ?
+            ORDER BY id ASC
+            """,
+            (app_id,),
+        ).fetchall()
+
+        total_products = len(products)
+        pending_before = sum(1 for p in products if p["movimiento_id"] is None)
+        movements_created = 0
+
+        if registrar_salidas:
+            for p in products:
+                if p["movimiento_id"] is not None:
+                    continue
+                usage_obs = f"APLICACION_CAMPO #{app_id} - {app['titulo'] or ''}".strip(" -")
+                extra_obs = _normalize_text(p["observacion"])
+                if extra_obs:
+                    usage_obs = f"{usage_obs} | {extra_obs}" if usage_obs else extra_obs
+
+                usage = _register_usage_in_connection(
+                    con=con,
+                    codigo=p["codigo"],
+                    cantidad=float(p["cantidad"] or 0),
+                    fecha_uso=fecha_exec,
+                    observacion=usage_obs,
+                    unidad=p["unidad"] or "",
+                    allow_negative=allow_negative,
+                    fuente="APLICACION_CAMPO",
+                    referencia=f"APP:{app_id}",
+                )
+                if not usage.get("ok"):
+                    con.rollback()
+                    return {
+                        "ok": False,
+                        "error": usage.get("error", "No se pudo registrar salidas para la aplicacion."),
+                        "codigo": usage.get("codigo", p["codigo"]),
+                        "application_id": app_id,
+                    }
+
+                con.execute(
+                    """
+                    UPDATE aplicaciones_campo_productos
+                    SET movimiento_id = ?
+                    WHERE id = ?
+                    """,
+                    (int(usage.get("movement_id", 0) or 0), int(p["id"])),
+                )
+                movements_created += 1
+
+        con.execute(
+            """
+            UPDATE aplicaciones_campo
+            SET estado = 'EJECUTADA',
+                fecha_ejecucion = ?,
+                updated_at = datetime('now')
+            WHERE id = ?
+            """,
+            (fecha_exec, app_id),
+        )
+        con.commit()
+        return {
+            "ok": True,
+            "application_id": app_id,
+            "fecha_ejecucion": fecha_exec,
+            "estado": "EJECUTADA",
+            "total_products": total_products,
+            "pending_before": pending_before,
+            "movements_created": movements_created,
+        }
+    finally:
+        con.close()
+
+
+def update_field_application_status(
+    db_path: str,
+    application_id: int,
+    estado: str,
+) -> Dict[str, Any]:
+    ensure_inventory_schema(db_path)
+    app_id = int(application_id or 0)
+    if app_id <= 0:
+        return {"ok": False, "error": "ID de aplicacion invalido."}
+
+    status_norm = _normalize_application_status(estado)
+    if status_norm not in _APP_STATUSES:
+        return {"ok": False, "error": f"Estado invalido: {estado}"}
+
+    if status_norm == "EJECUTADA":
+        return execute_field_application(
+            db_path=db_path,
+            application_id=app_id,
+            fecha_ejecucion=date.today().isoformat(),
+            registrar_salidas=False,
+        )
+
+    con = _connect(db_path)
+    try:
+        row = con.execute(
+            "SELECT id FROM aplicaciones_campo WHERE id = ?",
+            (app_id,),
+        ).fetchone()
+        if row is None:
+            return {"ok": False, "error": f"No existe la aplicacion #{app_id}."}
+
+        con.execute(
+            """
+            UPDATE aplicaciones_campo
+            SET estado = ?,
+                updated_at = datetime('now')
+            WHERE id = ?
+            """,
+            (status_norm, app_id),
+        )
+        con.commit()
+        return {"ok": True, "application_id": app_id, "estado": status_norm}
+    finally:
+        con.close()
+
+
+def get_field_calendar_summary(
+    db_path: str,
+    year: int,
+    month: int,
+    status: str = "",
+) -> Dict[str, Dict[str, int]]:
+    ensure_inventory_schema(db_path)
+    start_date, end_date = _month_date_bounds(int(year), int(month))
+    status_norm = _normalize_application_status(status) if _normalize_text(status) else ""
+    if status_norm and status_norm not in _APP_STATUSES:
+        status_norm = ""
+
+    con = _connect(db_path)
+    try:
+        rows = con.execute(
+            """
+            SELECT
+                fecha_programada,
+                COUNT(*) AS total,
+                SUM(CASE WHEN UPPER(TRIM(COALESCE(estado, 'PROGRAMADA'))) = 'PROGRAMADA' THEN 1 ELSE 0 END) AS programadas,
+                SUM(CASE WHEN UPPER(TRIM(COALESCE(estado, 'PROGRAMADA'))) = 'EJECUTADA' THEN 1 ELSE 0 END) AS ejecutadas,
+                SUM(CASE WHEN UPPER(TRIM(COALESCE(estado, 'PROGRAMADA'))) = 'CANCELADA' THEN 1 ELSE 0 END) AS canceladas
+            FROM aplicaciones_campo
+            WHERE fecha_programada >= ?
+              AND fecha_programada <= ?
+              AND (? = '' OR UPPER(TRIM(COALESCE(estado, 'PROGRAMADA'))) = ?)
+            GROUP BY fecha_programada
+            ORDER BY fecha_programada ASC
+            """,
+            (start_date, end_date, status_norm, status_norm),
+        ).fetchall()
+        out: Dict[str, Dict[str, int]] = {}
+        for r in rows:
+            key = _normalize_text(r["fecha_programada"])
+            if not key:
+                continue
+            out[key] = {
+                "total": int(r["total"] or 0),
+                "programadas": int(r["programadas"] or 0),
+                "ejecutadas": int(r["ejecutadas"] or 0),
+                "canceladas": int(r["canceladas"] or 0),
+            }
+        return out
+    finally:
+        con.close()
+
+
 def export_stock_to_excel(db_path: str, output_path: str) -> Dict[str, Any]:
     try:
         from openpyxl import Workbook
