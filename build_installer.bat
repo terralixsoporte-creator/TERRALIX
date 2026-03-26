@@ -9,6 +9,15 @@ REM ============================================================
 
 setlocal
 cd /d "%~dp0"
+set "NO_PAUSE=0"
+if /I "%~1"=="--no-pause" set "NO_PAUSE=1"
+
+if not exist "terr\Scripts\python.exe" (
+    echo ERROR: No se encontro terr\Scripts\python.exe
+    echo Crea/activa el entorno virtual en la carpeta "terr" antes de compilar.
+    call :maybe_pause
+    exit /b 1
+)
 
 echo.
 echo ========================================
@@ -16,6 +25,7 @@ echo  [1/4] Limpiando build anterior...
 echo ========================================
 if exist "build\TERRALIX" rmdir /s /q "build\TERRALIX"
 if exist "dist\TERRALIX"  rmdir /s /q "dist\TERRALIX"
+if exist "dist\installer" rmdir /s /q "dist\installer"
 
 echo.
 echo ========================================
@@ -25,7 +35,7 @@ set "PLAYWRIGHT_BROWSERS_PATH=%LOCALAPPDATA%\ms-playwright"
 terr\Scripts\python.exe -m playwright install chromium
 if errorlevel 1 (
     echo ERROR: No se pudo instalar Chromium de Playwright.
-    pause
+    call :maybe_pause
     exit /b 1
 )
 
@@ -36,7 +46,7 @@ echo ========================================
 terr\Scripts\python.exe -m PyInstaller TERRALIX.spec --noconfirm
 if errorlevel 1 (
     echo ERROR: PyInstaller fallo. Revisa los errores arriba.
-    pause
+    call :maybe_pause
     exit /b 1
 )
 
@@ -66,14 +76,14 @@ if "%ISCC%"=="" (
     echo   O abre installer.iss manualmente en Inno Setup Compiler.
     echo.
     echo PyInstaller completo. El ejecutable esta en: dist\TERRALIX\
-    pause
+    call :maybe_pause
     exit /b 0
 )
 
 "%ISCC%" installer.iss
 if errorlevel 1 (
     echo ERROR: Inno Setup fallo. Revisa los errores arriba.
-    pause
+    call :maybe_pause
     exit /b 1
 )
 
@@ -82,4 +92,10 @@ echo ========================================
 echo  BUILD COMPLETO!
 echo  Instalador: dist\installer\TerralixERP_Setup.exe
 echo ========================================
+call :maybe_pause
+exit /b 0
+
+:maybe_pause
+if "%NO_PAUSE%"=="1" exit /b 0
 pause
+exit /b 0

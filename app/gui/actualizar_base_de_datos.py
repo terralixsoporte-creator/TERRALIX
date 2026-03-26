@@ -112,24 +112,24 @@ def create_update_tab(parent):
 
     # --- TERMINAL DE SALIDA ---
     console = Text(frame, bg="#EAEAEA", fg="#000000", font=("Consolas", 10))
-    console.place(x=460, y=80, width=420, height=370)
+    console.place(x=460, y=80, width=420, height=320)
 
     scrollbar = Scrollbar(frame, command=console.yview)
-    scrollbar.place(x=880, y=80, height=370)
+    scrollbar.place(x=880, y=80, height=320)
     console.config(yscrollcommand=scrollbar.set)
 
     console_redirect = ConsoleRedirect(console)
 
     # --- PROGRESO ---
     lbl_descargas = ttk.Label(frame, text="Descargas: 0/?")
-    lbl_descargas.place(x=460, y=460)
+    lbl_descargas.place(x=460, y=406)
     pb_descargas = ttk.Progressbar(frame, mode="indeterminate", length=200)
-    pb_descargas.place(x=560, y=460, width=320)
+    pb_descargas.place(x=460, y=424, width=420, height=16)
 
     lbl_lectura = ttk.Label(frame, text="Lectura PDF: 0/0")
-    lbl_lectura.place(x=460, y=490)
+    lbl_lectura.place(x=460, y=442)
     pb_lectura = ttk.Progressbar(frame, mode="determinate", length=200, maximum=100)
-    pb_lectura.place(x=560, y=490, width=320)
+    pb_lectura.place(x=460, y=460, width=420, height=16)
 
 
     # --- LÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œGICA DE ACTUALIZACIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN ---
@@ -193,114 +193,6 @@ No cierres esta ventana hasta que termine.
                 return float(os.getenv(var_name, str(default)))
             except Exception:
                 return default
-
-        def _generar_reporte_sin_clasificar(db_path: str) -> str | None:
-            if not db_path or not os.path.isfile(db_path):
-                print("[WARN] No se pudo generar reporte: DB no encontrada.")
-                return None
-
-            rows = []
-            try:
-                with sqlite3.connect(db_path) as con:
-                    con.row_factory = sqlite3.Row
-                    cur = con.cursor()
-
-                    detalle_cols = {r[1] for r in cur.execute("PRAGMA table_info(detalle);").fetchall()}
-                    documentos_cols = {r[1] for r in cur.execute("PRAGMA table_info(documentos);").fetchall()}
-                    if not detalle_cols:
-                        print("[WARN] No existe tabla 'detalle'; se omite reporte.")
-                        return None
-
-                    select_fields = [
-                        "COALESCE(d.id_doc, '') AS id_doc",
-                        "COALESCE(d.descripcion, '') AS descripcion" if "descripcion" in detalle_cols else "'' AS descripcion",
-                        "COALESCE(d.codigo, '') AS codigo" if "codigo" in detalle_cols else "'' AS codigo",
-                        "COALESCE(d.linea, 0) AS linea" if "linea" in detalle_cols else "0 AS linea",
-                        "COALESCE(d.categoria, '') AS categoria" if "categoria" in detalle_cols else "'' AS categoria",
-                        "COALESCE(d.subcategoria, '') AS subcategoria" if "subcategoria" in detalle_cols else "'' AS subcategoria",
-                        "COALESCE(doc.razon_social, '') AS razon_social" if "razon_social" in documentos_cols else "'' AS razon_social",
-                        "COALESCE(doc.giro, '') AS giro" if "giro" in documentos_cols else "'' AS giro",
-                    ]
-
-                    where_clauses = []
-                    if "needs_review" in detalle_cols:
-                        where_clauses.append("COALESCE(d.needs_review, 0) = 1")
-                    if "categoria" in detalle_cols:
-                        where_clauses.append(
-                            "(d.categoria IS NULL OR TRIM(d.categoria) = '' OR UPPER(TRIM(d.categoria)) = 'SIN_CLASIFICAR')"
-                        )
-
-                    if not where_clauses:
-                        print("[WARN] No hay campos de clasificacion en 'detalle'; se omite reporte.")
-                        return None
-
-                    where_sql = " OR ".join(where_clauses)
-                    order_sql = "ORDER BY d.id_doc, d.linea" if "linea" in detalle_cols else "ORDER BY d.id_doc"
-
-                    q = f"""
-                        SELECT
-                            {", ".join(select_fields)}
-                        FROM detalle d
-                        LEFT JOIN documentos doc ON doc.id_doc = d.id_doc
-                        WHERE {where_sql}
-                        {order_sql}
-                    """
-                    rows = cur.execute(q).fetchall()
-            except Exception as e:
-                print(f"[WARN] No se pudo consultar detalle sin clasificar: {e}")
-                return None
-
-            report_dir = DATA_PATH / "reportes"
-            os.makedirs(report_dir, exist_ok=True)
-            report_path = report_dir / f"reporte_sin_clasificar_{time.strftime('%Y%m%d_%H%M%S')}.txt"
-
-            try:
-                with open(report_path, "w", encoding="utf-8") as f:
-                    f.write("REPORTE DE DETALLES SIN CLASIFICAR\n")
-                    f.write(f"Generado: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-                    f.write("=" * 80 + "\n\n")
-
-                    if not rows:
-                        f.write("No se encontraron detalles sin clasificar.\n")
-                    else:
-                        current_doc = None
-                        for r in rows:
-                            id_doc = (r["id_doc"] or "").strip()
-                            if id_doc != current_doc:
-                                if current_doc is not None:
-                                    f.write("\n")
-                                f.write(f"id_doc: {id_doc or '(sin id_doc)'}\n")
-                                f.write(f"razon_social: {(r['razon_social'] or '').strip() or '(vacio)'}\n")
-                                f.write(f"giro: {(r['giro'] or '').strip() or '(vacio)'}\n")
-                                f.write("detalle:\n")
-                                current_doc = id_doc
-
-                            linea = r["linea"]
-                            codigo = (r["codigo"] or "").strip()
-                            descripcion = (r["descripcion"] or "").strip() or "(sin descripcion)"
-
-                            linea_txt = str(linea) if linea not in (None, "") else "-"
-                            pref = f"  - linea {linea_txt}"
-                            if codigo:
-                                pref += f" | codigo: {codigo}"
-                            f.write(pref + "\n")
-                            f.write(f"    {descripcion}\n")
-            except Exception as e:
-                print(f"[WARN] No se pudo escribir reporte de sin clasificar: {e}")
-                return None
-
-            return str(report_path)
-
-        def _abrir_reporte(path_reporte: str) -> None:
-            if not path_reporte:
-                return
-            try:
-                if hasattr(os, "startfile"):
-                    os.startfile(path_reporte)  # type: ignore[attr-defined]
-                else:
-                    print(f"[INFO] Reporte generado en: {path_reporte}")
-            except Exception as e:
-                print(f"[WARN] No se pudo abrir el reporte automaticamente: {e}")
 
         def set_download_progress(done: int | None, total: int | None, extra: str = ""):
             def _update():
@@ -541,10 +433,6 @@ No cierres esta ventana hasta que termine.
                 run_codigo_backfill_insumos(ruta_pdf, db_path)
                 run_unidad_backfill_debug(db_path)
                 run_inventory_autosync(db_path)
-                reporte_path = _generar_reporte_sin_clasificar(db_path)
-                if reporte_path:
-                    print(f"[OK] Reporte de sin clasificar generado: {reporte_path}")
-                    _abrir_reporte(reporte_path)
                 print("\n[OK] Flujo completo terminado correctamente.\n")
 
             except ModuleNotFoundError:
@@ -592,12 +480,12 @@ No cierres esta ventana hasta que termine.
 
     # --- LAYOUT RESPONSIVE (escalado proporcional) ---
     base_layout = {
-        "console": (460, 80, 420, 370),
-        "scrollbar": (880, 80, 16, 370),
-        "lbl_descargas": (460, 460, None, None),
-        "pb_descargas": (560, 460, 320, 18),
-        "lbl_lectura": (460, 490, None, None),
-        "pb_lectura": (560, 490, 320, 18),
+        "console": (460, 80, 420, 320),
+        "scrollbar": (880, 80, 16, 320),
+        "lbl_descargas": (460, 406, None, None),
+        "pb_descargas": (460, 424, 420, 16),
+        "lbl_lectura": (460, 442, None, None),
+        "pb_lectura": (460, 460, 420, 16),
         "update_btn": (100, 340, 220, 50),
         "logo_center": (200, 200),
         "logo_size": (400, 400),

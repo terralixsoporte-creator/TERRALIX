@@ -48,9 +48,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; Main executable and all bundled files from PyInstaller output
-Source: "dist\TERRALIX\TERRALIX.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "dist\TERRALIX\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Copia TODO lo que genero PyInstaller (exe + _internal + futuros recursos)
+Source: "dist\TERRALIX\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Data files that should live beside the app (writable)
 Source: "data\Manual_Terralix_ERP.pdf"; DestDir: "{app}\data"; Flags: ignoreversion

@@ -34,6 +34,13 @@ for _candidate in PW_BROWSER_SOURCES:
         PW_BROWSERS_SRC = _candidate
         break
 
+# Descubrimiento automatico de submodulos internos para evitar que el spec
+# quede obsoleto cuando se agregan nuevos archivos en app/gui o core.
+app_gui_h = collect_submodules("app.gui")
+app_core_h = collect_submodules("app.core")
+dte_recibidos_h = collect_submodules("app.core.DTE_Recibidos")
+app_assets_update_h = collect_submodules("app.assets.update")
+
 
 # ── collect_all para paquetes que PyInstaller no detecta sólo ─────────
 dotenv_d,    dotenv_b,    dotenv_h    = collect_all("dotenv")
@@ -128,12 +135,19 @@ hiddenimports = [
     "app.core.DTE_Recibidos.categorizer",
     "app.core.DTE_Recibidos.dte_loader",
     "app.core.DTE_Recibidos.excel_sync",
+    "app.core.DTE_Recibidos.inventory",
     "app.core.DTE_Recibidos.local_classifier",
     "app.core.DTE_Recibidos.pipeline_guard",
     "app.core.DTE_Recibidos.weekly_background_checker",
     "app.assets",
     "app.assets.update",
     "app.assets.update.__version__",
+    "app.gui.inventario_tab",
+    "app.gui.aplicaciones_tab",
+    *app_gui_h,
+    *app_core_h,
+    *dte_recibidos_h,
+    *app_assets_update_h,
 
     # ── python-dotenv ──────────────────────────────────────────────
     "dotenv",
