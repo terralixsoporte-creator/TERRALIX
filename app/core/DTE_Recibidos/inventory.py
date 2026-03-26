@@ -1687,6 +1687,77 @@ def list_field_applications(
         con.close()
 
 
+def get_field_application(db_path: str, application_id: int) -> Dict[str, Any]:
+    ensure_inventory_schema(db_path)
+    app_id = int(application_id or 0)
+    if app_id <= 0:
+        return {"ok": False, "error": "ID de aplicacion invalido."}
+
+    con = _connect(db_path)
+    try:
+        row = con.execute(
+            """
+            SELECT
+                id,
+                titulo,
+                COALESCE(descripcion, '') AS descripcion,
+                fecha_programada,
+                COALESCE(fecha_ejecucion, '') AS fecha_ejecucion,
+                UPPER(TRIM(COALESCE(estado, 'PROGRAMADA'))) AS estado
+            FROM aplicaciones_campo
+            WHERE id = ?
+            """,
+            (app_id,),
+        ).fetchone()
+        if row is None:
+            return {"ok": False, "error": f"No existe la aplicacion #{app_id}."}
+
+        products = con.execute(
+            """
+            SELECT
+                p.id,
+                p.codigo,
+                COALESCE(c.descripcion_estandar, '') AS descripcion_estandar,
+                p.cantidad,
+                COALESCE(p.unidad, '') AS unidad,
+                COALESCE(p.observacion, '') AS observacion,
+                p.movimiento_id
+            FROM aplicaciones_campo_productos p
+            LEFT JOIN inventario_catalogo c
+              ON c.codigo = p.codigo
+            WHERE p.aplicacion_id = ?
+            ORDER BY p.id ASC
+            """,
+            (app_id,),
+        ).fetchall()
+
+        return {
+            "ok": True,
+            "application": {
+                "id": int(row["id"]),
+                "titulo": row["titulo"] or "",
+                "descripcion": row["descripcion"] or "",
+                "fecha_programada": row["fecha_programada"] or "",
+                "fecha_ejecucion": row["fecha_ejecucion"] or "",
+                "estado": (row["estado"] or "PROGRAMADA").upper(),
+            },
+            "products": [
+                {
+                    "id": int(p["id"]),
+                    "codigo": p["codigo"] or "",
+                    "descripcion_estandar": p["descripcion_estandar"] or "",
+                    "cantidad": float(p["cantidad"] or 0),
+                    "unidad": p["unidad"] or "",
+                    "observacion": p["observacion"] or "",
+                    "movimiento_id": int(p["movimiento_id"] or 0) if p["movimiento_id"] is not None else None,
+                }
+                for p in products
+            ],
+        }
+    finally:
+        con.close()
+
+
 def list_field_application_products(db_path: str, application_id: int) -> List[Dict[str, Any]]:
     ensure_inventory_schema(db_path)
     app_id = int(application_id or 0)
@@ -1731,6 +1802,193 @@ def list_field_application_products(db_path: str, application_id: int) -> List[D
             }
             for r in rows
         ]
+    finally:
+        con.close()
+
+
+def update_field_application(
+    db_path: str,
+    application_id: int,
+    titulo: str,
+    fecha_programada: Any,
+    descripcion: str = "",
+    productos: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """
+    Permite editar una aplicacion PROGRAMADA en su totalidad:
+      - titulo
+      - fecha_programada
+      - descripcion
+      - productos planificados
+    """
+    ensure_inventory_schema(db_path)
+    app_id = int(application_id or 0)
+    if app_id <= 0:
+        return {"ok": False, "error": "ID de aplicacion invalido."}
+
+    titulo_norm = _normalize_text(titulo)
+    if not titulo_norm:
+        return {"ok": False, "error": "Debes ingresar un titulo para la aplicacion."}
+
+    fecha_prog = _parse_date_iso_strict(fecha_programada)
+    if not fecha_prog:
+        return {"ok": False, "error": "Fecha programada invalida. Usa YYYY-MM-DD."}
+
+    normalized_products = _normalize_application_products(productos)
+    if not normalized_products.get("ok"):
+        return normalized_products
+
+    con = _connect(db_path)
+    try:
+        app = con.execute(
+            """
+            SELECT id, estado
+            FROM aplicaciones_campo
+            WHERE id = ?
+            """,
+            (app_id,),
+        ).fetchone()
+        if app is None:
+            return {"ok": False, "error": f"No existe la aplicacion #{app_id}."}
+
+        estado = _normalize_application_status(app["estado"])
+        if estado != "PROGRAMADA":
+            return {
+                "ok": False,
+                "error": "Solo se pueden editar aplicaciones en estado PROGRAMADA.",
+                "application_id": app_id,
+                "estado": estado,
+            }
+
+        linked = con.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM aplicaciones_campo_productos
+            WHERE aplicacion_id = ?
+              AND movimiento_id IS NOT NULL
+            """,
+            (app_id,),
+        ).fetchone()
+        linked_mov = int(linked["n"] or 0) if linked else 0
+        if linked_mov > 0:
+            return {
+                "ok": False,
+                "error": "La aplicacion ya tiene salidas registradas y no se puede editar.",
+                "application_id": app_id,
+                "linked_movements": linked_mov,
+            }
+
+        con.execute(
+            """
+            UPDATE aplicaciones_campo
+            SET titulo = ?,
+                descripcion = ?,
+                fecha_programada = ?,
+                estado = 'PROGRAMADA',
+                updated_at = datetime('now')
+            WHERE id = ?
+            """,
+            (
+                titulo_norm,
+                _normalize_text(descripcion),
+                fecha_prog,
+                app_id,
+            ),
+        )
+
+        con.execute(
+            "DELETE FROM aplicaciones_campo_productos WHERE aplicacion_id = ?",
+            (app_id,),
+        )
+        for p in normalized_products["products"]:
+            con.execute(
+                """
+                INSERT INTO aplicaciones_campo_productos
+                (aplicacion_id, codigo, cantidad, unidad, observacion, movimiento_id, created_at)
+                VALUES (?, ?, ?, ?, ?, NULL, datetime('now'))
+                """,
+                (
+                    app_id,
+                    p["codigo"],
+                    p["cantidad"],
+                    p["unidad"],
+                    p["observacion"],
+                ),
+            )
+
+        con.commit()
+        return {
+            "ok": True,
+            "application_id": app_id,
+            "estado": "PROGRAMADA",
+            "products_count": len(normalized_products["products"]),
+            "fecha_programada": fecha_prog,
+        }
+    finally:
+        con.close()
+
+
+def delete_field_application(
+    db_path: str,
+    application_id: int,
+) -> Dict[str, Any]:
+    """
+    Elimina una aplicacion sin movimientos de inventario asociados.
+    """
+    ensure_inventory_schema(db_path)
+    app_id = int(application_id or 0)
+    if app_id <= 0:
+        return {"ok": False, "error": "ID de aplicacion invalido."}
+
+    con = _connect(db_path)
+    try:
+        app = con.execute(
+            """
+            SELECT id, estado
+            FROM aplicaciones_campo
+            WHERE id = ?
+            """,
+            (app_id,),
+        ).fetchone()
+        if app is None:
+            return {"ok": False, "error": f"No existe la aplicacion #{app_id}."}
+
+        linked = con.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM aplicaciones_campo_productos
+            WHERE aplicacion_id = ?
+              AND movimiento_id IS NOT NULL
+            """,
+            (app_id,),
+        ).fetchone()
+        linked_mov = int(linked["n"] or 0) if linked else 0
+        if linked_mov > 0:
+            return {
+                "ok": False,
+                "error": (
+                    "No se puede eliminar esta aplicacion porque ya tiene salidas reales "
+                    "registradas en inventario."
+                ),
+                "application_id": app_id,
+                "linked_movements": linked_mov,
+            }
+
+        n_products = con.execute(
+            "SELECT COUNT(*) AS n FROM aplicaciones_campo_productos WHERE aplicacion_id = ?",
+            (app_id,),
+        ).fetchone()
+        products_count = int(n_products["n"] or 0) if n_products else 0
+
+        con.execute("DELETE FROM aplicaciones_campo_productos WHERE aplicacion_id = ?", (app_id,))
+        con.execute("DELETE FROM aplicaciones_campo WHERE id = ?", (app_id,))
+        con.commit()
+        return {
+            "ok": True,
+            "application_id": app_id,
+            "products_deleted": products_count,
+            "estado_anterior": _normalize_application_status(app["estado"]),
+        }
     finally:
         con.close()
 
@@ -1945,6 +2203,12 @@ def update_field_application_status(
     status_norm = _normalize_application_status(estado)
     if status_norm not in _APP_STATUSES:
         return {"ok": False, "error": f"Estado invalido: {estado}"}
+
+    if status_norm == "CANCELADA":
+        return delete_field_application(
+            db_path=db_path,
+            application_id=app_id,
+        )
 
     if status_norm == "EJECUTADA":
         return execute_field_application(

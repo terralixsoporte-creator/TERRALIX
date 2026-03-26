@@ -73,6 +73,7 @@ def create_applications_tab(parent):
 
     selected_date_var = tk.StringVar(value=today.isoformat())
     form_date_var = tk.StringVar(value=today.isoformat())
+    edit_state = {"app_id": 0}
 
     def _db_path() -> str:
         db = _clean_path(os.getenv("DB_PATH_DTE_RECIBIDOS", ""))
@@ -128,7 +129,7 @@ def create_applications_tab(parent):
     combo_status = ttk.Combobox(
         left,
         textvariable=status_var,
-        values=("PROGRAMADA", "CANCELADA"),
+        values=("PROGRAMADA",),
         state="readonly",
         width=18,
     )
@@ -178,11 +179,12 @@ def create_applications_tab(parent):
     btn_remove_product = ttk.Button(left, text="Quitar seleccionado")
     btn_remove_product.grid(row=13, column=0, sticky="w")
 
-    action_hint = ttk.Label(left, text="Paso 1: Cargar productos. Paso 2: Aceptar aplicacion.")
-    action_hint.grid(row=14, column=0, sticky="w", pady=(8, 2))
+    btn_save_application = ttk.Button(left, text="Cargar")
+    btn_save_application.grid(row=14, column=0, sticky="ew", pady=(8, 0))
 
-    btn_save_application = ttk.Button(left, text="Aceptar aplicacion")
-    btn_save_application.grid(row=15, column=0, sticky="ew")
+    form_mode_var = tk.StringVar(value="Modo: Nueva aplicacion")
+    lbl_form_mode = ttk.Label(left, textvariable=form_mode_var)
+    lbl_form_mode.grid(row=15, column=0, sticky="w", pady=(6, 0))
 
     # --- Right panel: calendar + management ---
     top = ttk.Frame(right)
@@ -204,7 +206,7 @@ def create_applications_tab(parent):
     combo_filter_status = ttk.Combobox(
         top,
         textvariable=filter_status_var,
-        values=("TODOS", "PROGRAMADA", "EJECUTADA", "CANCELADA"),
+        values=("TODOS", "PROGRAMADA", "EJECUTADA"),
         state="readonly",
         width=12,
     )
@@ -280,9 +282,13 @@ def create_applications_tab(parent):
     actions = ttk.Frame(right)
     actions.grid(row=4, column=0, sticky="ew", pady=(6, 4))
     btn_execute = ttk.Button(actions, text="Marcar ejecutada + salidas")
-    btn_cancel = ttk.Button(actions, text="Marcar cancelada")
+    btn_edit = ttk.Button(actions, text="Editar programada")
+    btn_cancel = ttk.Button(actions, text="Eliminar programada")
+    btn_new = ttk.Button(actions, text="Nueva aplicacion")
     btn_execute.grid(row=0, column=0, padx=(0, 6))
-    btn_cancel.grid(row=0, column=1)
+    btn_edit.grid(row=0, column=1, padx=(0, 6))
+    btn_cancel.grid(row=0, column=2, padx=(0, 6))
+    btn_new.grid(row=0, column=3)
 
     detail_columns = ("codigo", "descripcion", "cantidad", "unidad", "salida")
     detail_tree = ttk.Treeview(right, columns=detail_columns, show="headings", height=5, selectmode="none")
@@ -308,7 +314,9 @@ def create_applications_tab(parent):
             btn_today,
             btn_refresh,
             btn_execute,
+            btn_edit,
             btn_cancel,
+            btn_new,
         ]
     )
 
@@ -336,6 +344,15 @@ def create_applications_tab(parent):
     def _active_filter_status() -> str:
         raw = (filter_status_var.get() or "").strip().upper()
         return "" if raw in ("", "TODOS") else raw
+
+    def _set_edit_mode(app_id: int = 0) -> None:
+        edit_state["app_id"] = int(app_id or 0)
+        if edit_state["app_id"] > 0:
+            form_mode_var.set(f"Modo: Editando aplicacion #{edit_state['app_id']}")
+            btn_save_application.configure(text="Guardar cambios")
+        else:
+            form_mode_var.set("Modo: Nueva aplicacion")
+            btn_save_application.configure(text="Cargar")
 
     def _render_draft_products() -> None:
         for iid in draft_tree.get_children():
@@ -683,7 +700,7 @@ def create_applications_tab(parent):
         draft_products[:] = [p for p in draft_products if p.get("codigo", "").upper() != code]
         _render_draft_products()
 
-    def _clear_form(keep_date: bool = True) -> None:
+    def _clear_form(keep_date: bool = True, reset_edit: bool = True) -> None:
         title_var.set("")
         if not keep_date:
             form_date_var.set(date.today().isoformat())
@@ -691,6 +708,8 @@ def create_applications_tab(parent):
         status_var.set("PROGRAMADA")
         draft_products.clear()
         _render_draft_products()
+        if reset_edit:
+            _set_edit_mode(0)
 
     def refresh_applications_list() -> None:
         for iid in apps_tree.get_children():
@@ -785,12 +804,8 @@ def create_applications_tab(parent):
             iso = f"{year:04d}-{month:02d}-{day_num:02d}"
             info = summary.get(iso, {})
             total = int(info.get("total", 0) or 0)
-            done = int(info.get("ejecutadas", 0) or 0)
-            pending = int(info.get("programadas", 0) or 0)
             cell_bg = _calendar_bg_for_day(info)
             text = f"{day_num}"
-            if total > 0:
-                text = f"{day_num}\nE:{done} P:{pending}"
 
             cell_data["date"] = iso
             cell_data["base_bg"] = cell_bg
@@ -857,6 +872,61 @@ def create_applications_tab(parent):
             rows = []
         _render_detail_products(rows)
 
+    def edit_selected_application() -> None:
+        app_id = _selected_application_id()
+        if app_id <= 0:
+            messagebox.showwarning("Aplicaciones", "Selecciona una aplicacion programada.")
+            return
+
+        selected = apps_tree.selection()
+        values = apps_tree.item(selected[0]).get("values", []) if selected else []
+        estado = str(values[2]).strip().upper() if len(values) > 2 else ""
+        if estado != "PROGRAMADA":
+            messagebox.showwarning(
+                "Aplicaciones",
+                "Solo se pueden editar aplicaciones en estado PROGRAMADA.",
+            )
+            return
+
+        try:
+            detail = INV.get_field_application(_db_path(), app_id)
+        except Exception as e:
+            messagebox.showerror("Aplicaciones", f"No se pudo cargar aplicacion: {e}")
+            return
+        if not detail.get("ok"):
+            messagebox.showerror("Aplicaciones", detail.get("error", "No se pudo cargar aplicacion."))
+            return
+
+        app = detail.get("application", {}) or {}
+        products = detail.get("products", []) or []
+        if str(app.get("estado", "")).upper() != "PROGRAMADA":
+            messagebox.showwarning(
+                "Aplicaciones",
+                "Solo se pueden editar aplicaciones en estado PROGRAMADA.",
+            )
+            return
+
+        title_var.set(str(app.get("titulo", "")).strip())
+        form_date_var.set(str(app.get("fecha_programada", "")).strip() or date.today().isoformat())
+        status_var.set("PROGRAMADA")
+        txt_description.delete("1.0", tk.END)
+        txt_description.insert("1.0", str(app.get("descripcion", "") or ""))
+
+        draft_products.clear()
+        for p in products:
+            draft_products.append(
+                {
+                    "codigo": (p.get("codigo") or "").strip().upper(),
+                    "descripcion": (p.get("descripcion_estandar") or "").strip(),
+                    "cantidad": float(p.get("cantidad", 0) or 0),
+                    "unidad": (p.get("unidad") or "").strip().upper(),
+                    "observacion": (p.get("observacion") or "").strip(),
+                }
+            )
+        _render_draft_products()
+        _set_edit_mode(app_id)
+        _set_status(f"[INFO] Aplicacion #{app_id} cargada para edicion.")
+
     def save_application() -> None:
         db = ""
         try:
@@ -876,7 +946,7 @@ def create_applications_tab(parent):
             return
 
         estado = (status_var.get() or "PROGRAMADA").strip().upper()
-        if estado not in ("PROGRAMADA", "CANCELADA"):
+        if estado != "PROGRAMADA":
             messagebox.showwarning("Aplicaciones", "Estado invalido.")
             return
 
@@ -891,18 +961,27 @@ def create_applications_tab(parent):
             }
             for p in draft_products
         ]
-        fecha_ejec = None
+        edit_app_id = int(edit_state.get("app_id", 0) or 0)
 
         def _worker():
+            if edit_app_id > 0:
+                return INV.update_field_application(
+                    db_path=db,
+                    application_id=edit_app_id,
+                    titulo=titulo,
+                    fecha_programada=fecha_prog,
+                    descripcion=descripcion,
+                    productos=payload_products,
+                )
             return INV.create_field_application(
                 db_path=db,
                 titulo=titulo,
                 fecha_programada=fecha_prog,
                 descripcion=descripcion,
-                estado=estado,
+                estado="PROGRAMADA",
                 productos=payload_products,
                 registrar_salidas=False,
-                fecha_ejecucion=fecha_ejec,
+                fecha_ejecucion=None,
                 allow_negative=False,
             )
 
@@ -920,10 +999,16 @@ def create_applications_tab(parent):
             form_date_var.set(fecha_prog)
             refresh_calendar()
             refresh_applications_list()
-            _set_status(
-                f"[OK] Aplicacion #{res.get('application_id')} guardada. "
-                f"Productos planificados={res.get('products_count', 0)}"
-            )
+            if edit_app_id > 0:
+                _set_status(
+                    f"[OK] Aplicacion #{edit_app_id} actualizada. "
+                    f"Productos planificados={res.get('products_count', 0)}"
+                )
+            else:
+                _set_status(
+                    f"[OK] Aplicacion #{res.get('application_id')} guardada. "
+                    f"Productos planificados={res.get('products_count', 0)}"
+                )
 
         run_async("[SAVE] Guardando aplicacion...", _worker, _done)
 
@@ -938,6 +1023,13 @@ def create_applications_tab(parent):
             messagebox.showwarning("Aplicaciones", "Selecciona una aplicacion.")
             return
         values = apps_tree.item(app_selected[0]).get("values", [])
+        estado = str(values[2]).strip().upper() if len(values) > 2 else ""
+        if estado != "PROGRAMADA":
+            messagebox.showwarning(
+                "Aplicaciones",
+                "Solo se pueden ejecutar aplicaciones en estado PROGRAMADA.",
+            )
+            return
         app_title = str(values[3]).strip() if len(values) > 3 else ""
 
         fecha_exec = _parse_date_iso(selected_date_var.get()) or date.today().isoformat()
@@ -977,6 +1069,8 @@ def create_applications_tab(parent):
                 messagebox.showerror("Aplicaciones", err)
                 _set_status(f"[ERROR] {err}")
                 return
+            if int(edit_state.get("app_id", 0) or 0) == app_id:
+                _clear_form(keep_date=True, reset_edit=True)
             refresh_calendar()
             refresh_applications_list()
             _set_status(
@@ -986,42 +1080,57 @@ def create_applications_tab(parent):
 
         run_async("[RUN] Registrando salida real y ejecutando aplicacion...", _worker, _done)
 
-    def cancel_selected_application() -> None:
+    def delete_selected_application() -> None:
         app_id = _selected_application_id()
         if app_id <= 0:
             messagebox.showwarning("Aplicaciones", "Selecciona una aplicacion.")
             return
 
+        selected = apps_tree.selection()
+        values = apps_tree.item(selected[0]).get("values", []) if selected else []
+        estado = str(values[2]).strip().upper() if len(values) > 2 else ""
+        if estado != "PROGRAMADA":
+            messagebox.showwarning(
+                "Aplicaciones",
+                "Solo se pueden eliminar aplicaciones en estado PROGRAMADA.",
+            )
+            return
+
         ok = messagebox.askyesno(
             "Aplicaciones",
-            f"La aplicacion #{app_id} quedara en estado CANCELADA.\n\nDeseas continuar?",
+            f"Se eliminara la aplicacion programada #{app_id}.\n\nDeseas continuar?",
         )
         if not ok:
             return
 
         def _worker():
-            return INV.update_field_application_status(
+            return INV.delete_field_application(
                 db_path=_db_path(),
                 application_id=app_id,
-                estado="CANCELADA",
             )
 
         def _done(res):
             if not res.get("ok"):
-                err = res.get("error", "No se pudo cambiar el estado.")
+                err = res.get("error", "No se pudo eliminar la aplicacion.")
                 messagebox.showerror("Aplicaciones", err)
                 _set_status(f"[ERROR] {err}")
                 return
+            if int(edit_state.get("app_id", 0) or 0) == app_id:
+                _clear_form(keep_date=True, reset_edit=True)
             refresh_calendar()
             refresh_applications_list()
-            _set_status(f"[OK] Aplicacion #{app_id} marcada como CANCELADA.")
+            _set_status(f"[OK] Aplicacion #{app_id} eliminada.")
 
-        run_async("[STATE] Actualizando estado...", _worker, _done)
+        run_async("[DELETE] Eliminando aplicacion...", _worker, _done)
 
     def refresh_all() -> None:
         refresh_products_combo()
         refresh_calendar()
         refresh_applications_list()
+
+    def start_new_application_mode() -> None:
+        _clear_form(keep_date=True, reset_edit=True)
+        _set_status("[INFO] Formulario en modo nueva aplicacion.")
 
     # --- Bindings ---
     btn_add_product.configure(command=add_product_to_draft)
@@ -1032,10 +1141,13 @@ def create_applications_tab(parent):
     btn_today.configure(command=go_today)
     btn_refresh.configure(command=refresh_all)
     btn_execute.configure(command=execute_selected_application)
-    btn_cancel.configure(command=cancel_selected_application)
+    btn_edit.configure(command=edit_selected_application)
+    btn_cancel.configure(command=delete_selected_application)
+    btn_new.configure(command=start_new_application_mode)
 
     combo_filter_status.bind("<<ComboboxSelected>>", lambda _e: (refresh_calendar(), refresh_applications_list()))
     apps_tree.bind("<<TreeviewSelect>>", on_application_selected)
+    apps_tree.bind("<Double-1>", lambda _e: edit_selected_application())
 
     # Entradas rapidas
     title_entry.bind("<Return>", lambda _e: date_entry.focus_set())
