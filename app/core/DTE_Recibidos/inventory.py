@@ -1813,13 +1813,20 @@ def update_field_application(
     fecha_programada: Any,
     descripcion: str = "",
     productos: Optional[List[Dict[str, Any]]] = None,
+    allow_negative: bool = False,
 ) -> Dict[str, Any]:
     """
-    Permite editar una aplicacion PROGRAMADA en su totalidad:
+    Permite editar una aplicacion en su totalidad:
       - titulo
       - fecha_programada
       - descripcion
-      - productos planificados
+      - productos
+
+    Reglas:
+      - Si esta PROGRAMADA: se actualiza el plan (sin movimientos de inventario).
+      - Si esta EJECUTADA: se corrige la ejecucion real.
+        Se eliminan los movimientos anteriores de esa aplicacion y se recrean
+        segun el nuevo detalle de productos.
     """
     ensure_inventory_schema(db_path)
     app_id = int(application_id or 0)
@@ -1842,7 +1849,7 @@ def update_field_application(
     try:
         app = con.execute(
             """
-            SELECT id, estado
+            SELECT id, estado, fecha_ejecucion
             FROM aplicaciones_campo
             WHERE id = ?
             """,
@@ -1851,32 +1858,28 @@ def update_field_application(
         if app is None:
             return {"ok": False, "error": f"No existe la aplicacion #{app_id}."}
 
-        estado = _normalize_application_status(app["estado"])
-        if estado != "PROGRAMADA":
-            return {
-                "ok": False,
-                "error": "Solo se pueden editar aplicaciones en estado PROGRAMADA.",
-                "application_id": app_id,
-                "estado": estado,
-            }
+        estado_actual = _normalize_application_status(app["estado"])
+        if estado_actual not in {"PROGRAMADA", "EJECUTADA"}:
+            return {"ok": False, "error": f"No se puede editar estado actual: {estado_actual}"}
 
-        linked = con.execute(
+        existing_products = con.execute(
             """
-            SELECT COUNT(*) AS n
+            SELECT movimiento_id
             FROM aplicaciones_campo_productos
             WHERE aplicacion_id = ?
-              AND movimiento_id IS NOT NULL
             """,
             (app_id,),
-        ).fetchone()
-        linked_mov = int(linked["n"] or 0) if linked else 0
-        if linked_mov > 0:
-            return {
-                "ok": False,
-                "error": "La aplicacion ya tiene salidas registradas y no se puede editar.",
-                "application_id": app_id,
-                "linked_movements": linked_mov,
-            }
+        ).fetchall()
+
+        movement_ids: list[int] = []
+        for r in existing_products:
+            mov = r["movimiento_id"]
+            if mov is None:
+                continue
+            try:
+                movement_ids.append(int(mov))
+            except Exception:
+                pass
 
         con.execute(
             """
@@ -1884,7 +1887,6 @@ def update_field_application(
             SET titulo = ?,
                 descripcion = ?,
                 fecha_programada = ?,
-                estado = 'PROGRAMADA',
                 updated_at = datetime('now')
             WHERE id = ?
             """,
@@ -1900,29 +1902,126 @@ def update_field_application(
             "DELETE FROM aplicaciones_campo_productos WHERE aplicacion_id = ?",
             (app_id,),
         )
-        for p in normalized_products["products"]:
+
+        movements_deleted = 0
+        if movement_ids:
+            placeholders = ", ".join("?" for _ in movement_ids)
+            movements_deleted += int(
+                con.execute(
+                    f"DELETE FROM inventario_movimientos WHERE id IN ({placeholders})",
+                    tuple(movement_ids),
+                ).rowcount
+                or 0
+            )
+
+        # Limpieza defensiva para movimientos huérfanos de esta aplicación.
+        movements_deleted += int(
             con.execute(
                 """
-                INSERT INTO aplicaciones_campo_productos
-                (aplicacion_id, codigo, cantidad, unidad, observacion, movimiento_id, created_at)
-                VALUES (?, ?, ?, ?, ?, NULL, datetime('now'))
+                DELETE FROM inventario_movimientos
+                WHERE UPPER(TRIM(COALESCE(fuente, ''))) = 'APLICACION_CAMPO'
+                  AND UPPER(TRIM(COALESCE(referencia, ''))) = ?
                 """,
-                (
-                    app_id,
-                    p["codigo"],
-                    p["cantidad"],
-                    p["unidad"],
-                    p["observacion"],
-                ),
+                (f"APP:{app_id}".upper(),),
+            ).rowcount
+            or 0
+        )
+
+        movements_created = 0
+        if estado_actual == "EJECUTADA":
+            fecha_ejec = _parse_date_iso_strict(app["fecha_ejecucion"]) if app["fecha_ejecucion"] else None
+            fecha_ejec = fecha_ejec or fecha_prog
+
+            for p in normalized_products["products"]:
+                usage_obs = f"APLICACION_CAMPO #{app_id} - {titulo_norm}"
+                if p["observacion"]:
+                    usage_obs = f"{usage_obs} | {p['observacion']}"
+
+                usage = _register_usage_in_connection(
+                    con=con,
+                    codigo=p["codigo"],
+                    cantidad=p["cantidad"],
+                    fecha_uso=fecha_ejec,
+                    observacion=usage_obs,
+                    unidad=p["unidad"],
+                    allow_negative=allow_negative,
+                    fuente="APLICACION_CAMPO",
+                    referencia=f"APP:{app_id}",
+                )
+                if not usage.get("ok"):
+                    con.rollback()
+                    return {
+                        "ok": False,
+                        "error": usage.get("error", "No se pudo corregir salidas para la aplicación."),
+                        "codigo": usage.get("codigo", p["codigo"]),
+                        "application_id": app_id,
+                    }
+
+                movement_id = int(usage.get("movement_id", 0) or 0)
+                con.execute(
+                    """
+                    INSERT INTO aplicaciones_campo_productos
+                    (aplicacion_id, codigo, cantidad, unidad, observacion, movimiento_id, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+                    """,
+                    (
+                        app_id,
+                        p["codigo"],
+                        p["cantidad"],
+                        p["unidad"],
+                        p["observacion"],
+                        movement_id if movement_id > 0 else None,
+                    ),
+                )
+                movements_created += 1
+
+            con.execute(
+                """
+                UPDATE aplicaciones_campo
+                SET estado = 'EJECUTADA',
+                    fecha_ejecucion = ?,
+                    updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (fecha_ejec, app_id),
+            )
+        else:
+            for p in normalized_products["products"]:
+                con.execute(
+                    """
+                    INSERT INTO aplicaciones_campo_productos
+                    (aplicacion_id, codigo, cantidad, unidad, observacion, movimiento_id, created_at)
+                    VALUES (?, ?, ?, ?, ?, NULL, datetime('now'))
+                    """,
+                    (
+                        app_id,
+                        p["codigo"],
+                        p["cantidad"],
+                        p["unidad"],
+                        p["observacion"],
+                    ),
+                )
+
+            con.execute(
+                """
+                UPDATE aplicaciones_campo
+                SET estado = 'PROGRAMADA',
+                    fecha_ejecucion = NULL,
+                    updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (app_id,),
             )
 
         con.commit()
         return {
             "ok": True,
             "application_id": app_id,
-            "estado": "PROGRAMADA",
+            "estado": "EJECUTADA" if estado_actual == "EJECUTADA" else "PROGRAMADA",
             "products_count": len(normalized_products["products"]),
             "fecha_programada": fecha_prog,
+            "movements_deleted": movements_deleted,
+            "movements_created": movements_created,
         }
     finally:
         con.close()
@@ -1933,7 +2032,7 @@ def delete_field_application(
     application_id: int,
 ) -> Dict[str, Any]:
     """
-    Elimina una aplicacion sin movimientos de inventario asociados.
+    Elimina una aplicacion y sus salidas de inventario asociadas.
     """
     ensure_inventory_schema(db_path)
     app_id = int(application_id or 0)
@@ -1953,26 +2052,24 @@ def delete_field_application(
         if app is None:
             return {"ok": False, "error": f"No existe la aplicacion #{app_id}."}
 
-        linked = con.execute(
+        rows_mov = con.execute(
             """
-            SELECT COUNT(*) AS n
+            SELECT DISTINCT movimiento_id
             FROM aplicaciones_campo_productos
             WHERE aplicacion_id = ?
               AND movimiento_id IS NOT NULL
             """,
             (app_id,),
-        ).fetchone()
-        linked_mov = int(linked["n"] or 0) if linked else 0
-        if linked_mov > 0:
-            return {
-                "ok": False,
-                "error": (
-                    "No se puede eliminar esta aplicacion porque ya tiene salidas reales "
-                    "registradas en inventario."
-                ),
-                "application_id": app_id,
-                "linked_movements": linked_mov,
-            }
+        ).fetchall()
+        movement_ids: list[int] = []
+        for r in rows_mov:
+            mov = r["movimiento_id"]
+            if mov is None:
+                continue
+            try:
+                movement_ids.append(int(mov))
+            except Exception:
+                pass
 
         n_products = con.execute(
             "SELECT COUNT(*) AS n FROM aplicaciones_campo_productos WHERE aplicacion_id = ?",
@@ -1982,12 +2079,37 @@ def delete_field_application(
 
         con.execute("DELETE FROM aplicaciones_campo_productos WHERE aplicacion_id = ?", (app_id,))
         con.execute("DELETE FROM aplicaciones_campo WHERE id = ?", (app_id,))
+
+        movements_deleted = 0
+        if movement_ids:
+            placeholders = ", ".join("?" for _ in movement_ids)
+            movements_deleted += int(
+                con.execute(
+                    f"DELETE FROM inventario_movimientos WHERE id IN ({placeholders})",
+                    tuple(movement_ids),
+                ).rowcount
+                or 0
+            )
+
+        movements_deleted += int(
+            con.execute(
+                """
+                DELETE FROM inventario_movimientos
+                WHERE UPPER(TRIM(COALESCE(fuente, ''))) = 'APLICACION_CAMPO'
+                  AND UPPER(TRIM(COALESCE(referencia, ''))) = ?
+                """,
+                (f"APP:{app_id}".upper(),),
+            ).rowcount
+            or 0
+        )
+
         con.commit()
         return {
             "ok": True,
             "application_id": app_id,
             "products_deleted": products_count,
             "estado_anterior": _normalize_application_status(app["estado"]),
+            "movements_deleted": movements_deleted,
         }
     finally:
         con.close()
@@ -2289,6 +2411,133 @@ def get_field_calendar_summary(
         con.close()
 
 
+def _get_purchase_entries_for_export(db_path: str) -> List[Dict[str, Any]]:
+    ensure_inventory_schema(db_path)
+    con = _connect(db_path)
+    try:
+        has_detalle = _table_exists(con, "detalle")
+        has_documentos = _table_exists(con, "documentos")
+        detalle_cols = (
+            {r[1] for r in con.execute("PRAGMA table_info(detalle);").fetchall()}
+            if has_detalle
+            else set()
+        )
+        documentos_cols = (
+            {r[1] for r in con.execute("PRAGMA table_info(documentos);").fetchall()}
+            if has_documentos
+            else set()
+        )
+
+        select_parts = [
+            "m.id AS movimiento_id",
+            "COALESCE(m.fecha, '') AS fecha",
+            "COALESCE(m.codigo, '') AS codigo",
+            "COALESCE(c.descripcion_estandar, '') AS descripcion_estandar_catalogo",
+            "COALESCE(c.categoria, '') AS categoria",
+            "COALESCE(c.tipo, '') AS tipo",
+            "COALESCE(m.cantidad, 0) AS cantidad_entrada",
+            "COALESCE(m.unidad, '') AS unidad_movimiento",
+            "COALESCE(m.referencia, '') AS referencia_detalle",
+        ]
+
+        join_parts = [
+            "LEFT JOIN inventario_catalogo c ON c.codigo = m.codigo",
+        ]
+
+        if has_detalle:
+            join_parts.append("LEFT JOIN detalle d ON d.id_det = m.referencia")
+            select_parts.extend(
+                [
+                    "COALESCE(d.id_doc, '') AS id_doc" if "id_doc" in detalle_cols else "'' AS id_doc",
+                    "COALESCE(d.linea, '') AS linea" if "linea" in detalle_cols else "'' AS linea",
+                    "COALESCE(d.descripcion, '') AS descripcion_dte_original" if "descripcion" in detalle_cols else "'' AS descripcion_dte_original",
+                    "COALESCE(d.cantidad, 0) AS cantidad_dte" if "cantidad" in detalle_cols else "0 AS cantidad_dte",
+                    "COALESCE(d.unidad, '') AS unidad_dte" if "unidad" in detalle_cols else "'' AS unidad_dte",
+                    "COALESCE(d.precio_unitario, 0) AS precio_unitario_dte" if "precio_unitario" in detalle_cols else "0 AS precio_unitario_dte",
+                    "COALESCE(d.monto_item, 0) AS monto_item_dte" if "monto_item" in detalle_cols else "0 AS monto_item_dte",
+                ]
+            )
+        else:
+            select_parts.extend(
+                [
+                    "'' AS id_doc",
+                    "'' AS linea",
+                    "'' AS descripcion_dte_original",
+                    "0 AS cantidad_dte",
+                    "'' AS unidad_dte",
+                    "0 AS precio_unitario_dte",
+                    "0 AS monto_item_dte",
+                ]
+            )
+
+        can_join_documentos = has_detalle and has_documentos and "id_doc" in detalle_cols
+        if can_join_documentos:
+            join_parts.append("LEFT JOIN documentos doc ON doc.id_doc = d.id_doc")
+            select_parts.extend(
+                [
+                    "COALESCE(doc.razon_social, '') AS proveedor" if "razon_social" in documentos_cols else "'' AS proveedor",
+                    "COALESCE(doc.rut_emisor, '') AS rut_emisor" if "rut_emisor" in documentos_cols else "'' AS rut_emisor",
+                ]
+            )
+        else:
+            select_parts.extend(
+                [
+                    "'' AS proveedor",
+                    "'' AS rut_emisor",
+                ]
+            )
+
+        query = f"""
+            SELECT
+                {", ".join(select_parts)}
+            FROM inventario_movimientos m
+            {' '.join(join_parts)}
+            WHERE m.signo = 1
+              AND COALESCE(m.fuente, '') = 'DTE_DETALLE'
+              AND UPPER(TRIM(COALESCE(m.codigo, ''))) NOT IN ('', '-')
+            ORDER BY m.fecha DESC, m.id DESC
+        """
+
+        rows = con.execute(query).fetchall()
+        out: List[Dict[str, Any]] = []
+        for r in rows:
+            descripcion_catalogo = _normalize_text(r["descripcion_estandar_catalogo"])
+            descripcion_dte = _normalize_text(r["descripcion_dte_original"])
+            descripcion_final = descripcion_catalogo or descripcion_dte
+
+            cant_dte = _to_float(r["cantidad_dte"])
+            precio_unitario = _to_float(r["precio_unitario_dte"])
+            monto_item = _to_float(r["monto_item_dte"])
+            precio_calculado = round(monto_item / cant_dte, 6) if cant_dte > 0 else precio_unitario
+
+            out.append(
+                {
+                    "movimiento_id": int(r["movimiento_id"] or 0),
+                    "fecha": _normalize_text(r["fecha"]),
+                    "codigo": _normalize_code(r["codigo"]),
+                    "descripcion_estandar": descripcion_final,
+                    "categoria": _normalize_text(r["categoria"]).upper(),
+                    "tipo": _normalize_text(r["tipo"]).upper(),
+                    "cantidad_entrada": _to_float(r["cantidad_entrada"]),
+                    "unidad_movimiento": _normalize_text(r["unidad_movimiento"]).upper(),
+                    "id_doc": _normalize_text(r["id_doc"]),
+                    "linea": _normalize_text(r["linea"]),
+                    "proveedor": _normalize_text(r["proveedor"]),
+                    "rut_emisor": _normalize_text(r["rut_emisor"]),
+                    "descripcion_dte_original": descripcion_dte,
+                    "cantidad_dte": cant_dte,
+                    "unidad_dte": _normalize_text(r["unidad_dte"]).upper(),
+                    "precio_unitario_dte": precio_unitario,
+                    "monto_item_dte": monto_item,
+                    "precio_unitario_calculado": precio_calculado,
+                    "referencia_detalle": _normalize_text(r["referencia_detalle"]),
+                }
+            )
+        return out
+    finally:
+        con.close()
+
+
 def export_stock_to_excel(db_path: str, output_path: str) -> Dict[str, Any]:
     try:
         from openpyxl import Workbook
@@ -2296,6 +2545,7 @@ def export_stock_to_excel(db_path: str, output_path: str) -> Dict[str, Any]:
         return {"ok": False, "error": "Falta la dependencia openpyxl para exportar Excel."}
 
     rows = get_stock_summary(db_path=db_path, search_text="", limit=200000)
+    entries_rows = _get_purchase_entries_for_export(db_path=db_path)
 
     wb = Workbook()
     ws = wb.active
@@ -2331,8 +2581,62 @@ def export_stock_to_excel(db_path: str, output_path: str) -> Dict[str, Any]:
             ]
         )
 
+    ws_entries = wb.create_sheet(title="entradas_compra")
+    entries_headers = [
+        "movimiento_id",
+        "fecha",
+        "codigo",
+        "descripcion_estandar",
+        "categoria",
+        "tipo",
+        "cantidad_entrada",
+        "unidad_movimiento",
+        "id_doc",
+        "linea",
+        "proveedor",
+        "rut_emisor",
+        "descripcion_dte_original",
+        "cantidad_dte",
+        "unidad_dte",
+        "precio_unitario_dte",
+        "monto_item_dte",
+        "precio_unitario_calculado",
+        "referencia_detalle",
+    ]
+    ws_entries.append(entries_headers)
+
+    for r in entries_rows:
+        ws_entries.append(
+            [
+                r["movimiento_id"],
+                r["fecha"],
+                r["codigo"],
+                r["descripcion_estandar"],
+                r["categoria"],
+                r["tipo"],
+                r["cantidad_entrada"],
+                r["unidad_movimiento"],
+                r["id_doc"],
+                r["linea"],
+                r["proveedor"],
+                r["rut_emisor"],
+                r["descripcion_dte_original"],
+                r["cantidad_dte"],
+                r["unidad_dte"],
+                r["precio_unitario_dte"],
+                r["monto_item_dte"],
+                r["precio_unitario_calculado"],
+                r["referencia_detalle"],
+            ]
+        )
+
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     wb.save(str(out))
 
-    return {"ok": True, "path": str(out), "n_rows": len(rows)}
+    return {
+        "ok": True,
+        "path": str(out),
+        "n_rows": len(rows),
+        "n_entries_rows": len(entries_rows),
+    }

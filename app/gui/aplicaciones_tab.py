@@ -73,7 +73,7 @@ def create_applications_tab(parent):
 
     selected_date_var = tk.StringVar(value=today.isoformat())
     form_date_var = tk.StringVar(value=today.isoformat())
-    edit_state = {"app_id": 0}
+    edit_state = {"app_id": 0, "estado": "PROGRAMADA"}
 
     def _db_path() -> str:
         db = _clean_path(os.getenv("DB_PATH_DTE_RECIBIDOS", ""))
@@ -281,9 +281,9 @@ def create_applications_tab(parent):
 
     actions = ttk.Frame(right)
     actions.grid(row=4, column=0, sticky="ew", pady=(6, 4))
-    btn_execute = ttk.Button(actions, text="Marcar ejecutada + salidas")
-    btn_edit = ttk.Button(actions, text="Editar programada")
-    btn_cancel = ttk.Button(actions, text="Eliminar programada")
+    btn_execute = ttk.Button(actions, text="Marcar ejecutada")
+    btn_edit = ttk.Button(actions, text="Editar")
+    btn_cancel = ttk.Button(actions, text="Eliminar")
     btn_new = ttk.Button(actions, text="Nueva aplicacion")
     btn_execute.grid(row=0, column=0, padx=(0, 6))
     btn_edit.grid(row=0, column=1, padx=(0, 6))
@@ -345,14 +345,22 @@ def create_applications_tab(parent):
         raw = (filter_status_var.get() or "").strip().upper()
         return "" if raw in ("", "TODOS") else raw
 
-    def _set_edit_mode(app_id: int = 0) -> None:
+    def _set_edit_mode(app_id: int = 0, estado: str = "PROGRAMADA") -> None:
         edit_state["app_id"] = int(app_id or 0)
+        estado_norm = (estado or "").strip().upper() or "PROGRAMADA"
+        edit_state["estado"] = estado_norm
         if edit_state["app_id"] > 0:
-            form_mode_var.set(f"Modo: Editando aplicacion #{edit_state['app_id']}")
+            form_mode_var.set(
+                f"Modo: Editando aplicacion #{edit_state['app_id']} ({estado_norm})"
+            )
             btn_save_application.configure(text="Guardar cambios")
+            status_var.set(estado_norm)
+            combo_status.configure(state="disabled")
         else:
             form_mode_var.set("Modo: Nueva aplicacion")
             btn_save_application.configure(text="Cargar")
+            status_var.set("PROGRAMADA")
+            combo_status.configure(state="readonly")
 
     def _render_draft_products() -> None:
         for iid in draft_tree.get_children():
@@ -875,17 +883,7 @@ def create_applications_tab(parent):
     def edit_selected_application() -> None:
         app_id = _selected_application_id()
         if app_id <= 0:
-            messagebox.showwarning("Aplicaciones", "Selecciona una aplicacion programada.")
-            return
-
-        selected = apps_tree.selection()
-        values = apps_tree.item(selected[0]).get("values", []) if selected else []
-        estado = str(values[2]).strip().upper() if len(values) > 2 else ""
-        if estado != "PROGRAMADA":
-            messagebox.showwarning(
-                "Aplicaciones",
-                "Solo se pueden editar aplicaciones en estado PROGRAMADA.",
-            )
+            messagebox.showwarning("Aplicaciones", "Selecciona una aplicacion.")
             return
 
         try:
@@ -899,16 +897,10 @@ def create_applications_tab(parent):
 
         app = detail.get("application", {}) or {}
         products = detail.get("products", []) or []
-        if str(app.get("estado", "")).upper() != "PROGRAMADA":
-            messagebox.showwarning(
-                "Aplicaciones",
-                "Solo se pueden editar aplicaciones en estado PROGRAMADA.",
-            )
-            return
+        estado_actual = str(app.get("estado", "")).strip().upper() or "PROGRAMADA"
 
         title_var.set(str(app.get("titulo", "")).strip())
         form_date_var.set(str(app.get("fecha_programada", "")).strip() or date.today().isoformat())
-        status_var.set("PROGRAMADA")
         txt_description.delete("1.0", tk.END)
         txt_description.insert("1.0", str(app.get("descripcion", "") or ""))
 
@@ -924,7 +916,7 @@ def create_applications_tab(parent):
                 }
             )
         _render_draft_products()
-        _set_edit_mode(app_id)
+        _set_edit_mode(app_id, estado_actual)
         _set_status(f"[INFO] Aplicacion #{app_id} cargada para edicion.")
 
     def save_application() -> None:
@@ -945,8 +937,9 @@ def create_applications_tab(parent):
             messagebox.showwarning("Aplicaciones", "Fecha invalida. Usa YYYY-MM-DD.")
             return
 
+        edit_app_id = int(edit_state.get("app_id", 0) or 0)
         estado = (status_var.get() or "PROGRAMADA").strip().upper()
-        if estado != "PROGRAMADA":
+        if edit_app_id <= 0 and estado != "PROGRAMADA":
             messagebox.showwarning("Aplicaciones", "Estado invalido.")
             return
 
@@ -961,7 +954,6 @@ def create_applications_tab(parent):
             }
             for p in draft_products
         ]
-        edit_app_id = int(edit_state.get("app_id", 0) or 0)
 
         def _worker():
             if edit_app_id > 0:
@@ -972,6 +964,7 @@ def create_applications_tab(parent):
                     fecha_programada=fecha_prog,
                     descripcion=descripcion,
                     productos=payload_products,
+                    allow_negative=False,
                 )
             return INV.create_field_application(
                 db_path=db,
@@ -1086,19 +1079,9 @@ def create_applications_tab(parent):
             messagebox.showwarning("Aplicaciones", "Selecciona una aplicacion.")
             return
 
-        selected = apps_tree.selection()
-        values = apps_tree.item(selected[0]).get("values", []) if selected else []
-        estado = str(values[2]).strip().upper() if len(values) > 2 else ""
-        if estado != "PROGRAMADA":
-            messagebox.showwarning(
-                "Aplicaciones",
-                "Solo se pueden eliminar aplicaciones en estado PROGRAMADA.",
-            )
-            return
-
         ok = messagebox.askyesno(
             "Aplicaciones",
-            f"Se eliminara la aplicacion programada #{app_id}.\n\nDeseas continuar?",
+            f"Se eliminara la aplicacion #{app_id}.\n\nDeseas continuar?",
         )
         if not ok:
             return

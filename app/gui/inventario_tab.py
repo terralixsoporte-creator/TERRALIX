@@ -551,7 +551,11 @@ def create_inventory_tab(parent):
             if not res.get("ok"):
                 log(f"[ERROR] No se pudo exportar stock.")
                 return
-            log(f"[OK] Stock exportado: {res.get('path')} ({res.get('n_rows', 0)} filas)")
+            log(
+                "[OK] Stock exportado: "
+                f"{res.get('path')} "
+                f"(stock={res.get('n_rows', 0)} filas, entradas={res.get('n_entries_rows', 0)} filas)"
+            )
 
         run_async("[EXPORT] Exportando stock a Excel...", _worker, _done)
 
