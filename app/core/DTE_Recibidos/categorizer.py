@@ -22,6 +22,8 @@ try:
 except ImportError:
     from app.core.DTE_Recibidos.local_classifier import get_classifier
 
+from app.core.cloud_sync import initialize_supabase_sync
+
 
 # =========================
 # CONFIG
@@ -1610,6 +1612,10 @@ def main() -> None:
 
     ensure_mantenedor_categoria_table(con)
     ensure_mantenedor_keyword_table(con)
+    try:
+        initialize_supabase_sync(db_path=DB_PATH, log=lambda _m: None)
+    except Exception:
+        pass
 
     catalogo = fetch_catalogo(con)
     if not catalogo:

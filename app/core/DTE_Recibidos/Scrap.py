@@ -90,6 +90,24 @@ FEC_EMI_RE = re.compile(
 )
 
 
+def _mirror_pdf_to_gdrive(ruta_pdf: str) -> None:
+    """
+    Copia el PDF descargado a la carpeta de Google Drive Desktop si esta configurada.
+    """
+    try:
+        from app.core.cloud_sync import mirror_pdf_to_google_drive
+
+        result = mirror_pdf_to_google_drive(ruta_pdf, log=print)
+        if not result.get("ok", False):
+            print(f"[DRIVE][WARN] No se pudo copiar '{ruta_pdf}': {result.get('error', 'error_desconocido')}")
+            return
+
+        if result.get("copied", False):
+            print(f"[DRIVE] PDF copiado: {result.get('dest', '')}")
+    except Exception as e:
+        print(f"[DRIVE][WARN] Error al copiar a Google Drive: {e}")
+
+
 def _env_int(name, default, min_value=1):
     try:
         value = int(str(os.getenv(name, str(default))).strip())
@@ -478,6 +496,7 @@ def procesar_tabla(
                         with open(ruta_pdf, "wb") as f:
                             f.write(pdf_bytes)
                         print(f"PDF guardado: {ruta_pdf}")
+                        _mirror_pdf_to_gdrive(ruta_pdf)
                         if doc_id:
                             existing_doc_ids.add(doc_id)
                         if key_rut_folio:
@@ -566,6 +585,7 @@ def procesar_tabla(
                     with open(ruta_pdf, "wb") as f:
                         f.write(pdf_bytes)
                     print(f"PDF guardado: {ruta_pdf}")
+                    _mirror_pdf_to_gdrive(ruta_pdf)
                     if doc_id:
                         existing_doc_ids.add(doc_id)
                     if key_rut_folio:

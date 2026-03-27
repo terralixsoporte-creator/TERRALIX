@@ -8,7 +8,7 @@ import json
 import unicodedata
 import shutil
 import sys
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from pathlib import Path
 from typing import List
 from dotenv import load_dotenv
@@ -25,6 +25,7 @@ if str(_ROOT) not in sys.path:
     sys.path.append(str(_ROOT))
 
 from app.core.paths import get_env_path, get_user_data_dir
+from app.core.cloud_sync import initialize_supabase_sync
 
 # === RUTAS CLAVE ===
 load_dotenv(str(get_env_path()), override=False)
@@ -176,26 +177,50 @@ import re
 
 def _to_float(numstr: str) -> float:
     """
-    Convierte un string con formato chileno a float.
-    En Chile: los montos son enteros (sin decimales), el punto es separador de miles.
-    Ej: '351.500' -> 351500.0, '1.234' -> 1234.0
+    Convierte strings numericos tolerando:
+    - miles con punto/coma: 11.246 / 11,246
+    - decimales con punto/coma: 90000.0 / 90000,0
+    - texto mixto con simbolos.
     """
-    if not numstr:
+    if numstr is None:
         return 0.0
-    s = str(numstr).strip()
-    s = s.replace(" ", "")
-    
-    # En formato chileno, el punto es separador de miles, no decimal
-    # Si hay coma, la ignoramos ya que en CLP no hay decimales
-    if "," in s:
-        s = s.split(",")[0]  # Tomar solo la parte antes de la coma
-    
-    # Remover separadores de miles (puntos)
-    s = s.replace(".", "")
-    
+    if isinstance(numstr, (int, float)):
+        return float(numstr)
+
+    s = str(numstr).strip().replace(" ", "").replace("\u00A0", "")
+    s = re.sub(r"[^0-9,.\-]", "", s)
+    if not s or s in {"-", ".", ","}:
+        return 0.0
+
+    negative = s.startswith("-")
+    if negative:
+        s = s[1:]
+    if not s:
+        return 0.0
+
+    if "." in s and "," in s:
+        # Usa como decimal el separador que aparece mas a la derecha.
+        if s.rfind(",") > s.rfind("."):
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
+    elif "," in s:
+        parts = s.split(",")
+        # 12,345,678 -> miles; 1234,56 -> decimal
+        if len(parts) > 1 and all(len(p) == 3 for p in parts[1:]):
+            s = "".join(parts)
+        else:
+            s = s.replace(",", ".")
+    elif "." in s:
+        parts = s.split(".")
+        # 12.345.678 -> miles; 90000.0 -> decimal
+        if len(parts) > 1 and all(len(p) == 3 for p in parts[1:]):
+            s = "".join(parts)
+
     try:
-        return float(s)
-    except:
+        val = float(s)
+        return -val if negative else val
+    except Exception:
         return 0.0
 
 def extraer_monto(txt: str, default: float = 0.0) -> float:
@@ -204,23 +229,37 @@ def extraer_monto(txt: str, default: float = 0.0) -> float:
     Si no hay '$', toma el Ãºltimo nÃºmero plausible en el texto.
     Acepta formatos con miles y decimales tipo '351.500' o '1,23'.
     """
-    if not txt:
+    if txt is None:
         return default
+    if isinstance(txt, (int, float)):
+        return float(txt)
+
     s = " ".join(str(txt).split())
+    if not s:
+        return default
 
-    # 1) despuÃ©s del Ãºltimo '$'
-    if "$" in s:
-        tail = s.split("$")[-1]
-        m = re.search(r"(\d{1,3}(?:[.\s]\d{3})*(?:,\d+)?|\d+(?:,\d+)?)", tail)
-        if m:
-            return _to_float(m.group(1))
+    # Prioriza texto posterior al ultimo '$' (suele ser el monto objetivo).
+    scope = s.split("$")[-1] if "$" in s else s
 
-    # 2) fallback: Ãºltimo nÃºmero del texto
-    nums = re.findall(r"\d{1,3}(?:[.\s]\d{3})*(?:,\d+)?|\d+(?:,\d+)?", s)
-    if nums:
-        return _to_float(nums[-1])
+    # Captura tokens numericos completos (evita trocear 90000 en 900/00/0).
+    tokens = re.findall(r"-?\d[\d\.,]*", scope)
+    if not tokens and scope is not s:
+        tokens = re.findall(r"-?\d[\d\.,]*", s)
+    if not tokens:
+        return default
 
-    return default
+    # Escoge el token con mayor cantidad de digitos; en empate, el ultimo.
+    best_idx = 0
+    best_score = (-1, -1)
+    for i, tok in enumerate(tokens):
+        digits = len(re.sub(r"\D", "", tok))
+        score = (digits, i)
+        if score >= best_score:
+            best_score = score
+            best_idx = i
+
+    val = _to_float(tokens[best_idx])
+    return val if val != 0.0 or "0" in tokens[best_idx] else default
 
 def extraer_porcentaje(txt: str):
     """Devuelve 19.0 si encuentra '19%' (tolerante a '19 %')."""
@@ -236,17 +275,20 @@ def parse_iva(campo_iva: str, monto_neto: float | None = None) -> float:
     Intenta monto desde '$'. Si no hay, intenta porcentaje desde 'monto_neto'.
     Ãšltimo recurso: Ãºltimo nÃºmero en el texto.
     """
-    # monto explÃ­cito
     monto = extraer_monto(campo_iva, default=0.0)
+    pct = extraer_porcentaje(campo_iva)
+
+    # Caso tipico "19%": evita guardar 19 como monto IVA.
+    if pct is not None and monto_neto and monto_neto > 0:
+        if monto <= 100 and abs(monto - pct) < 0.0001:
+            return round(monto_neto * (pct / 100.0))
+
     if monto > 0:
         return monto
 
-    # porcentaje â†’ calcula desde neto
-    pct = extraer_porcentaje(campo_iva)
     if pct is not None and monto_neto and monto_neto > 0:
         return round(monto_neto * (pct / 100.0))
 
-    # fallback: Ãºltimo nÃºmero
     return extraer_monto(campo_iva, default=0.0)
 
 # -------- Normalizaciones bÃ¡sicas --------
@@ -350,38 +392,72 @@ def infer_identity_from_pdf_filename(pdf_path: str) -> tuple[str, str, str] | No
 # -------- Fecha de emisiÃ³n --------
 def parse_fecha(raw: str):
     """
-    Soporta: '29 de Mayo del 2025', '27 de Marzo del 2023', '20/10/2025', '2025-10-20', '20-10-2025'
+    Parsea fechas de emision en formatos comunes:
+    - '29 de Mayo del 2025'
+    - '20/10/2025', '20-10-2025', '2025-10-20', '2025/10/20'
+    - '20/10/25'
     Devuelve date o None.
     """
     if not raw:
         return None
+    if isinstance(raw, date):
+        return raw
+
     s = str(raw).strip().lower()
-    # normaliza acentos
-    s_norm = ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+    if not s:
+        return None
+
+    # Normaliza acentos y deja texto limpio
+    s_norm = "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
+    s_norm = re.sub(r"fecha\s*emision\s*[:\-]?\s*", "", s_norm)
+    s_norm = re.sub(r"\s+", " ", s_norm).strip()
 
     meses = {
-        "enero":"01","febrero":"02","marzo":"03","abril":"04","mayo":"05",
-        "junio":"06","julio":"07","agosto":"08","septiembre":"09","setiembre":"09",
-        "octubre":"10","noviembre":"11","diciembre":"12"
+        "enero": "01", "febrero": "02", "marzo": "03", "abril": "04", "mayo": "05",
+        "junio": "06", "julio": "07", "agosto": "08", "septiembre": "09", "setiembre": "09",
+        "octubre": "10", "noviembre": "11", "diciembre": "12",
+        "ene": "01", "feb": "02", "mar": "03", "abr": "04", "may": "05",
+        "jun": "06", "jul": "07", "ago": "08", "sep": "09", "set": "09",
+        "oct": "10", "nov": "11", "dic": "12",
     }
 
-    # "11 de septiembre del 2025"
-    m = re.search(r"(\d{1,2})\s*de\s*([a-z]+)\s*(?:del\s*)?(\d{4})", s_norm)
+    # "11 de septiembre del 2025" o "11 de sep 2025"
+    m = re.search(r"(\d{1,2})\s*de\s*([a-z]+)\s*(?:del?\s*)?(\d{2,4})", s_norm)
     if m:
         d, mes_txt, y = m.groups()
-        mes = meses.get(mes_txt, "01")
-        try:
-            return datetime.strptime(f"{int(d):02d}/{mes}/{y}", "%d/%m/%Y").date()
-        except:
-            pass
+        mes = meses.get(mes_txt)
+        if mes:
+            y = f"20{int(y):02d}" if len(y) == 2 else y
+            try:
+                return datetime.strptime(f"{int(d):02d}/{mes}/{y}", "%d/%m/%Y").date()
+            except Exception:
+                pass
 
-    # formatos numÃ©ricos
-    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+    # formatos numéricos
+    candidate = s_norm.replace(".", "/").replace("-", "/")
+    for fmt in ("%d/%m/%Y", "%Y/%m/%d", "%d/%m/%y", "%Y%m%d"):
         try:
-            return datetime.strptime(s, fmt).date()
-        except:
+            return datetime.strptime(candidate, fmt).date()
+        except Exception:
             continue
     return None
+
+
+def _fecha_en_rango_valido(fecha: date) -> bool:
+    if not fecha:
+        return False
+    min_fecha = date(2000, 1, 1)
+    max_fecha = date.today() + timedelta(days=7)
+    return min_fecha <= fecha <= max_fecha
+
+
+def _normalizar_fecha_db(value):
+    if value is None:
+        return None
+    if isinstance(value, date):
+        return value
+    parsed = parse_fecha(str(value))
+    return parsed
 
 # -------- RazÃ³n social / Giro --------
 def _remove_label_prefix(s: str, label_regex: str) -> str:
@@ -524,6 +600,12 @@ add_column_if_missing(engine, "detalle", "ADD COLUMN unidad TEXT")
 add_column_if_missing(engine, "detalle", "ADD COLUMN categoria TEXT")
 add_column_if_missing(engine, "detalle", "ADD COLUMN subcategoria TEXT")
 add_column_if_missing(engine, "detalle", "ADD COLUMN tipo_gasto TEXT")
+
+# Inicializa cola/triggers de sincronizacion con Supabase.
+try:
+    initialize_supabase_sync(db_path=DB_PATH, log=lambda _m: None)
+except Exception:
+    pass
 # ============================================================
 # ðŸ”— REFERENCIAS Y SALDOS
 # ============================================================
@@ -661,8 +743,202 @@ def _detalles_count(conn, doc_id: str) -> int:
     except Exception:
         return 0
 
+
+def _extraer_referencia_ids(datos_raw: dict) -> tuple[str, str]:
+    ref_text = ""
+    for k, v in (datos_raw or {}).items():
+        if isinstance(k, str) and "referen" in k.lower():
+            ref_text = str(v)
+            break
+    ref_id = parse_id_doc_referencia(ref_text) if ref_text else None
+    if ref_id:
+        return ref_id, ref_id
+    return "", ""
+
+
+def _actualizar_cabecera_documento(conn, doc_id: str, doc_data: dict):
+    # Correccion controlada: solo campos de cabecera que suelen venir con OCR errado.
+    campos_permitidos = (
+        "fecha_emision",
+        "IVA",
+        "impuesto_adicional",
+        "monto_total",
+    )
+    payload = {}
+    for k in campos_permitidos:
+        if k not in (doc_data or {}):
+            continue
+        v = doc_data.get(k)
+        if k == "fecha_emision" and v is None:
+            continue
+        payload[k] = v
+    if not payload:
+        return
+    conn.execute(
+        documentos.update().where(documentos.c.id_doc == doc_id).values(**payload)
+    )
+
+
+def _obtener_fecha_emision_documento(conn, doc_id: str):
+    try:
+        row = conn.execute(
+            select(documentos.c.fecha_emision).where(documentos.c.id_doc == doc_id)
+        ).fetchone()
+        if not row:
+            return None
+        return _normalizar_fecha_db(row[0])
+    except Exception:
+        return None
+
+
+def _verificar_fecha_guardada(conn, doc_id: str, fecha_esperada):
+    if fecha_esperada is None:
+        return
+    try:
+        actual = _obtener_fecha_emision_documento(conn, doc_id)
+        if actual != fecha_esperada:
+            print(
+                "[WARN] Fecha emitida no coincide tras guardar: "
+                f"id_doc={doc_id} esperada={fecha_esperada} guardada={actual}"
+            )
+    except Exception:
+        pass
+
+
+def _to_monto_float(value) -> float:
+    if value is None:
+        return 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+    s = str(value).strip()
+    if not s or s.lower() == "null":
+        return 0.0
+    try:
+        return _to_float(s)
+    except Exception:
+        return extraer_monto(s, default=0.0)
+
+
+def _actualizar_descuento_e_impuesto_detalle(conn, doc_id: str, items: list[dict]) -> int:
+    if not items:
+        return 0
+
+    updated = 0
+    for idx, it in enumerate(items, start=1):
+        descuento_val = _to_monto_float(it.get("descuento", 0))
+        imp_adic_val = _to_monto_float(it.get("impuesto_adicional", 0))
+        try:
+            res = conn.execute(
+                detalle.update()
+                .where(detalle.c.id_doc == doc_id)
+                .where(detalle.c.linea == idx)
+                .values(
+                    Descuento=descuento_val,
+                    impuesto_adicional=imp_adic_val,
+                )
+            )
+            rowcount = int(getattr(res, "rowcount", 0) or 0)
+            if rowcount > 0:
+                updated += rowcount
+        except Exception as e:
+            print(f"No se pudo actualizar descuento/impuesto detalle ({doc_id}:{idx}): {e}")
+
+    return updated
+
+
+def alinear_fecha_emision_detalle_con_documentos(apply_fix: bool = True) -> dict:
+    """
+    Verifica/corrige que detalle.fecha_emision coincida con documentos.fecha_emision por id_doc.
+    """
+    try:
+        with engine.begin() as conn:
+            cols_det = [r[1] for r in conn.exec_driver_sql("PRAGMA table_info(detalle);").fetchall()]
+            if "fecha_emision" not in cols_det:
+                return {
+                    "ok": False,
+                    "error": "detalle_sin_columna_fecha_emision",
+                    "total_detalle": 0,
+                    "with_documento": 0,
+                    "missing_documento": 0,
+                    "mismatches_before": 0,
+                    "updated": 0,
+                    "mismatches_after": 0,
+                }
+
+            total_detalle = int(conn.exec_driver_sql("SELECT COUNT(*) FROM detalle;").scalar() or 0)
+            with_documento = int(
+                conn.exec_driver_sql(
+                    """
+                    SELECT COUNT(*)
+                    FROM detalle d
+                    JOIN documentos doc ON doc.id_doc = d.id_doc
+                    """
+                ).scalar()
+                or 0
+            )
+            missing_documento = max(0, total_detalle - with_documento)
+
+            mismatch_sql = """
+                SELECT COUNT(*)
+                FROM detalle d
+                JOIN documentos doc ON doc.id_doc = d.id_doc
+                WHERE COALESCE(substr(trim(d.fecha_emision), 1, 10), '')
+                      <> COALESCE(substr(trim(CAST(doc.fecha_emision AS TEXT)), 1, 10), '')
+            """
+            mismatches_before = int(conn.exec_driver_sql(mismatch_sql).scalar() or 0)
+
+            updated = 0
+            if apply_fix and mismatches_before > 0:
+                upd_res = conn.exec_driver_sql(
+                    """
+                    UPDATE detalle
+                       SET fecha_emision = (
+                           SELECT substr(trim(CAST(doc.fecha_emision AS TEXT)), 1, 10)
+                           FROM documentos doc
+                           WHERE doc.id_doc = detalle.id_doc
+                       )
+                     WHERE EXISTS (
+                           SELECT 1
+                           FROM documentos doc
+                           WHERE doc.id_doc = detalle.id_doc
+                             AND COALESCE(substr(trim(detalle.fecha_emision), 1, 10), '')
+                                 <> COALESCE(substr(trim(CAST(doc.fecha_emision AS TEXT)), 1, 10), '')
+                       )
+                    """
+                )
+                rowcount = int(getattr(upd_res, "rowcount", 0) or 0)
+                updated = rowcount if rowcount >= 0 else mismatches_before
+
+            mismatches_after = int(conn.exec_driver_sql(mismatch_sql).scalar() or 0)
+            if mismatches_after < mismatches_before and updated == 0:
+                updated = mismatches_before - mismatches_after
+
+            return {
+                "ok": True,
+                "total_detalle": total_detalle,
+                "with_documento": with_documento,
+                "missing_documento": missing_documento,
+                "mismatches_before": mismatches_before,
+                "updated": updated,
+                "mismatches_after": mismatches_after,
+            }
+    except Exception as e:
+        return {
+            "ok": False,
+            "error": str(e),
+            "total_detalle": 0,
+            "with_documento": 0,
+            "missing_documento": 0,
+            "mismatches_before": 0,
+            "updated": 0,
+            "mismatches_after": 0,
+        }
+
+
 def guardar_en_bd(datos_raw, ruta_pdf):
     """Guarda una factura procesada en la base de datos."""
+    only_numeric_fix = bool(datos_raw.get("__only_numeric_fix__", False))
+
     # Etiquetas OCR originales
     tipo_doc_raw   = datos_raw.get("Tipo Documento", "Factura ElectrÃ³nica")
     rut_raw        = datos_raw.get("Emisor", "")
@@ -672,6 +948,7 @@ def guardar_en_bd(datos_raw, ruta_pdf):
     giro_raw       = datos_raw.get("Giro", "")
     monto_neto_raw = datos_raw.get("Monto Neto", "0")
     iva_raw        = datos_raw.get("IVA", "")
+    monto_exento_raw = datos_raw.get("Monto Exento", datos_raw.get("monto_exento", "0"))
     imp_adic_raw   = datos_raw.get("Impuesto Adicional", datos_raw.get("impuesto_adicional", "0"))
     total_raw      = datos_raw.get("Total", "")
 
@@ -696,81 +973,130 @@ def guardar_en_bd(datos_raw, ruta_pdf):
             )
         tipo_doc, rut, folio = tipo_fn, rut_fn, folio_fn
 
-    fecha    = parse_fecha(fecha_raw) or datetime.now().date()  # si no se pudo, hoy (o pon None si prefieres)
+    fecha_parseada = parse_fecha(fecha_raw)
+    if fecha_parseada is not None and not _fecha_en_rango_valido(fecha_parseada):
+        print(
+            "[WARN] Fecha de emision fuera de rango, se ignora: "
+            f"id_doc={build_id_doc(tipo_doc, rut, folio)} raw='{fecha_raw}' parsed={fecha_parseada}"
+        )
+        fecha_parseada = None
+
     razon    = clean_razon_social(rs_raw)
     giro     = clean_giro(giro_raw)
 
     # IVA / montos
     monto_neto = extraer_monto(monto_neto_raw)
     iva_val    = parse_iva(iva_raw, monto_neto=monto_neto)
+    monto_exento_val = extraer_monto(monto_exento_raw, default=0.0)
     impuesto_adicional_val = extraer_monto(imp_adic_raw, default=0.0)
     total_val  = extraer_monto(total_raw) or monto_neto  # si no hay total, al menos guarda neto
 
     # ID determinÃ­stico
     doc_id = build_id_doc(tipo_doc, rut, folio)  # usa rut sin puntos (ya lo hace build_id_doc)
+    referencia_val, dte_referencia_val = _extraer_referencia_ids(datos_raw)
+
+    doc_data = {
+        "id_doc": doc_id,
+        "tipo_doc": tipo_doc,
+        "folio": folio,
+        "rut_emisor": rut,             # SOLO 'XXXXXXXX-D'
+        "razon_social": razon,         # limpio, sin tildes/Ã±
+        "giro": giro,                  # limpio, sin tildes/Ã±
+        "IVA": iva_val,
+        "monto_excento": monto_exento_val,
+        "impuesto_adicional": impuesto_adicional_val,
+        "monto_total": total_val,
+        "referencia": referencia_val,
+        "DTE_referencia": dte_referencia_val,
+        "ruta_pdf": ruta_pdf,
+    }
 
     with engine.begin() as conn:
         ya_existe = existe_en_bd(conn, tipo_doc, rut, folio)
+        fecha_objetivo = fecha_parseada
+
         if ya_existe:
             doc_id_dup = doc_id
+            fecha_actual = _obtener_fecha_emision_documento(conn, doc_id_dup)
+            if fecha_objetivo is None:
+                fecha_objetivo = fecha_actual
+                if str(fecha_raw or "").strip():
+                    print(
+                        "[WARN] Fecha de emision no parseable; se conserva fecha existente: "
+                        f"id_doc={doc_id_dup} raw='{fecha_raw}' actual={fecha_actual}"
+                    )
+
+            if fecha_objetivo is not None:
+                doc_data["fecha_emision"] = fecha_objetivo
+            else:
+                doc_data.pop("fecha_emision", None)
+
+            # Siempre actualiza campos selectivos de cabecera al releer PDFs.
+            try:
+                _actualizar_cabecera_documento(conn, doc_id_dup, doc_data)
+                _verificar_fecha_guardada(conn, doc_id_dup, fecha_objetivo)
+            except Exception as e:
+                print(f"No se pudo actualizar cabecera existente ({doc_id_dup}): {e}")
+
             det_count = _detalles_count(conn, doc_id_dup)
+            items_dup = datos_raw.get("__items_detalle__") or []
             if det_count > 0:
+                det_actualizados = 0
+                if only_numeric_fix and items_dup:
+                    det_actualizados = _actualizar_descuento_e_impuesto_detalle(conn, doc_id_dup, items_dup)
+
                 if _es_nota_credito(tipo_doc=tipo_doc, doc_id=doc_id_dup):
                     _forzar_montos_negativos_nota_credito(conn, doc_id_dup)
-                # Documento duplicado con detalle existente: sin cambios
-                print(f"Leido: {doc_id_dup} (ya existia con detalle, sin subida)")
+                if only_numeric_fix:
+                    print(
+                        f"Actualizado en BD: {doc_id_dup} "
+                        f"(campos selectivos cabecera + detalle desc/imp lineas={det_actualizados})"
+                    )
+                else:
+                    print(f"Actualizado en BD: {doc_id_dup} (cabecera corregida, detalle conservado)")
                 return
             else:
+                if only_numeric_fix:
+                    print(f"Actualizado en BD: {doc_id_dup} (campos selectivos cabecera; sin detalle para corregir)")
+                    return
+
                 # Documento existe pero sin detalle: usar items de ai_reader si vienen
-                items_dup = datos_raw.get("__items_detalle__") or []
                 if items_dup:
                     try:
                         _insertar_items_detalle(conn, doc_id_dup, items_dup, tipo_doc=tipo_doc)
-                        print(f"Subida a BD: {doc_id_dup} (detalle agregado)")
+                        print(f"Actualizado en BD: {doc_id_dup} (cabecera + detalle agregado)")
                     except Exception as e:
                         print(f"No se pudo insertar detalle (duplicado): {e}")
                 else:
-                    print(f"Leido: {doc_id_dup} (sin detalle, sin subida)")
+                    print(f"Actualizado en BD: {doc_id_dup} (solo cabecera)")
                 return
 
-        doc_data = {
-            "id_doc": doc_id,
-            "tipo_doc": tipo_doc,
-            "folio": folio,
-            "rut_emisor": rut,             # SOLO 'XXXXXXXX-D'
-            "razon_social": razon,         # limpio, sin tildes/Ã±
-            "giro": giro,                  # limpio, sin tildes/Ã±
-            "fecha_emision": fecha,
-            "IVA": iva_val,
-            "monto_excento": 0.0,
-            "impuesto_adicional": impuesto_adicional_val,
-            "monto_total": total_val,
-            # intenta extraer referencia desde etiquetas OCR (cualquier clave que contenga 'referen')
-            "referencia": "",
-            "DTE_referencia": "",
-            "ruta_pdf": ruta_pdf
-        }
+        if fecha_objetivo is not None:
+            doc_data["fecha_emision"] = fecha_objetivo
+        else:
+            doc_data.pop("fecha_emision", None)
+            if str(fecha_raw or "").strip():
+                print(
+                    "[WARN] Fecha de emision no parseable en insercion; se guarda NULL: "
+                    f"id_doc={doc_id} raw='{fecha_raw}'"
+                )
+
         try:
             conn.execute(documentos.insert().values(**doc_data))
             # Inserta items de detalle si vienen desde ai_reader
             items = datos_raw.get("__items_detalle__") or []
             if items:
                 _insertar_items_detalle(conn, doc_id, items, tipo_doc=tipo_doc)
-            # Intenta vincular referencia
-            try:
-                ref_text = ""
-                for k, v in datos_raw.items():
-                    if isinstance(k, str) and "referen" in k.lower():
-                        ref_text = str(v)
-                        break
-                ref_id = parse_id_doc_referencia(ref_text) if ref_text else None
-                if ref_id:
-                    conn.execute(documentos.update().where(documentos.c.id_doc == doc_id).values(referencia=ref_id, DTE_referencia=ref_id))
-            except Exception as e:
-                print(f"No se pudo parsear referencia: {e}")
+            _verificar_fecha_guardada(conn, doc_id, fecha_objetivo)
             print(f"Subida a BD: {doc_id}")
         except IntegrityError:
-            print(f"Leido: {doc_id} (ya existi­a, sin subida)")
+            # Condicion de carrera: si otro hilo lo insertó, actualiza cabecera de todas formas.
+            try:
+                _actualizar_cabecera_documento(conn, doc_id, doc_data)
+                _verificar_fecha_guardada(conn, doc_id, fecha_objetivo)
+                print(f"Actualizado en BD: {doc_id} (post-integrity)")
+            except Exception:
+                print(f"Leido: {doc_id} (ya existi­a, sin subida)")
 
 
 # ============================================================

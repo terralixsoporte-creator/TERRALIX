@@ -17,6 +17,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from app.core.cloud_sync import initialize_supabase_sync
+
 _IGNORED_CODES = {"-"}
 _NON_FIELD_CATEGORIES = {"EPP", "MATERIAL", "HERRAMIENTA", "CONTABLE", "RIEGO"}
 _NON_FIELD_TYPES = {
@@ -311,6 +313,11 @@ def ensure_inventory_schema(db_path: str) -> None:
         con.commit()
     finally:
         con.close()
+
+    try:
+        initialize_supabase_sync(db_path=db_path, log=lambda _m: None)
+    except Exception:
+        pass
 
 
 def _header_aliases() -> Dict[str, set[str]]:

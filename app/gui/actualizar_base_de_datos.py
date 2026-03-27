@@ -183,7 +183,7 @@ def create_update_tab(parent):
         print(
             """
 Iniciando actualizacion de base de datos.
-Secuencia: 1) Descarga SII -> 2) Lectura IA -> 3) Categorizacion -> 4) Backfill codigos -> 5) Backfill unidades (debug local) -> 6) Sync inventario automatico
+Secuencia: 1) Descarga SII -> 2) Lectura IA -> 3) Categorizacion -> 4) Backfill codigos -> 5) Backfill unidades (debug local) -> 6) Sync inventario automatico -> 7) Sync Supabase
 No cierres esta ventana hasta que termine.
 """
         )
@@ -193,6 +193,109 @@ No cierres esta ventana hasta que termine.
                 return float(os.getenv(var_name, str(default)))
             except Exception:
                 return default
+
+        def _env_int(var_name: str, default: int, min_value: int = 1, max_value: int = 10000) -> int:
+            try:
+                value = int(os.getenv(var_name, str(default)))
+            except Exception:
+                value = default
+            value = max(min_value, value)
+            value = min(max_value, value)
+            return value
+
+        def _env_bool(var_name: str, default: bool = False) -> bool:
+            raw = str(os.getenv(var_name, "true" if default else "false")).strip().lower()
+            if raw in {"1", "true", "yes", "y", "si", "on"}:
+                return True
+            if raw in {"0", "false", "no", "n", "off"}:
+                return False
+            return default
+
+        def init_supabase_sync(db_path: str) -> dict:
+            try:
+                from app.core.cloud_sync import initialize_supabase_sync
+
+                result = initialize_supabase_sync(db_path=db_path, log=print)
+                if not result.get("enabled", True):
+                    print("[SYNC] Supabase sync deshabilitado (SUPABASE_SYNC_ENABLED=false).")
+                    return result
+
+                if result.get("ok", False):
+                    print(
+                        "[SYNC] Inicializado: "
+                        f"triggers={result.get('tables_with_triggers', 0)} "
+                        f"tablas_miss={len(result.get('tables_missing', []) or [])}"
+                    )
+                else:
+                    print(f"[SYNC][WARN] No se pudo inicializar: {result.get('error', 'error_desconocido')}")
+                return result
+            except Exception as e:
+                print(f"[SYNC][WARN] Error inicializando sincronizacion: {e}")
+                return {"ok": False, "enabled": True, "error": str(e)}
+
+        def run_supabase_sync_once(
+            db_path: str,
+            *,
+            stage: str,
+            max_items: int,
+            quiet_when_empty: bool = True,
+            tables: list[str] | None = None,
+        ) -> dict:
+            try:
+                from app.core.cloud_sync import sync_pending_changes
+
+                stats = sync_pending_changes(
+                    db_path=db_path,
+                    max_items=max_items,
+                    tables=tables,
+                    log=print,
+                )
+            except Exception as e:
+                print(f"[SYNC][WARN] Fallo en sync ({stage}): {e}")
+                return {"ok": False, "enabled": True, "error": str(e)}
+
+            if not stats.get("enabled", True):
+                return stats
+
+            if not stats.get("ok", False):
+                print(f"[SYNC][WARN] {stage}: {stats.get('error', 'error_desconocido')}")
+                return stats
+
+            processed = int(stats.get("processed", 0) or 0)
+            failed = int(stats.get("failed", 0) or 0)
+            dropped = int(stats.get("dropped", 0) or 0)
+            pending = int(stats.get("pending", 0) or 0)
+            if (not quiet_when_empty) or processed > 0 or failed > 0 or dropped > 0:
+                print(
+                    "[SYNC] "
+                    f"{stage}: ok={processed} fail={failed} drop={dropped} pending={pending}"
+                )
+            return stats
+
+        def run_supabase_sync_drain(
+            db_path: str,
+            *,
+            stage: str,
+            max_items: int,
+            max_rounds: int = 8,
+            tables: list[str] | None = None,
+        ) -> None:
+            for _ in range(max_rounds):
+                stats = run_supabase_sync_once(
+                    db_path,
+                    stage=stage,
+                    max_items=max_items,
+                    quiet_when_empty=True,
+                    tables=tables,
+                )
+                if not stats.get("enabled", True):
+                    return
+                if not stats.get("ok", False):
+                    return
+                processed = int(stats.get("processed", 0) or 0)
+                pending = int(stats.get("pending", 0) or 0)
+                if pending <= 0 or processed <= 0:
+                    break
 
         def set_download_progress(done: int | None, total: int | None, extra: str = ""):
             def _update():
@@ -229,7 +332,9 @@ No cierres esta ventana hasta que termine.
         def run_ai_reader_batch(ruta_pdf: str, db_path: str):
             from app.core.DTE_Recibidos import ai_reader as AIR
 
-            print("\n[2/6] Iniciando lectura IA de PDFs...\n")
+            only_docs_mode = _env_bool("GUI_ONLY_DOCUMENTOS_RECALC", False)
+            stage_label = "[2/2]" if only_docs_mode else "[2/6]"
+            print(f"\n{stage_label} Iniciando lectura IA de PDFs...\n")
             targets = AIR._collect_target_files(file_arg=None, dir_arg=ruta_pdf)
             if not targets:
                 print("No se encontraron PDFs para procesar con IA.")
@@ -239,6 +344,16 @@ No cierres esta ventana hasta que termine.
             db_path_resolved = db_path if (db_path and os.path.isfile(db_path)) else AIR._get_db_path()
             debug_mode = os.getenv("AI_DETALLE_DEBUG", "false").lower() == "true"
             ai_throttle_s = max(0.0, _env_float("GUI_AI_THROTTLE_SECONDS", 0.25))
+            reprocess_existing = _env_bool("GUI_AI_REPROCESS_EXISTING_DOCS", False) or only_docs_mode
+            only_docs_update_descuento = _env_bool("GUI_ONLY_DOCUMENTOS_UPDATE_DESCUENTO", True)
+            skip_detalle_on_read = only_docs_mode and (not only_docs_update_descuento)
+            if only_docs_mode:
+                if only_docs_update_descuento:
+                    print("[IA] Modo SOLO_DOCUMENTOS habilitado: se corrige cabecera + descuento/impuesto adicional en detalle (sin reescribir lineas).")
+                else:
+                    print("[IA] Modo SOLO_DOCUMENTOS habilitado: se actualiza solo cabecera en tabla 'documentos'.")
+            elif reprocess_existing:
+                print("[IA] Reproceso forzado habilitado: se releeran PDFs existentes y se actualizara cabecera de documentos.")
 
             parsed_targets = []
             candidate_ids = []
@@ -250,7 +365,8 @@ No cierres esta ventana hasta que termine.
 
             existing_ids = set()
             preload_failed = False
-            if candidate_ids and os.path.isfile(db_path_resolved):
+            should_preload_existing = bool(candidate_ids) and os.path.isfile(db_path_resolved) and ((not reprocess_existing) or only_docs_mode)
+            if should_preload_existing:
                 try:
                     with sqlite3.connect(db_path_resolved) as con:
                         cur = con.cursor()
@@ -273,14 +389,24 @@ No cierres esta ventana hasta que termine.
             total = len(parsed_targets)
             for idx, (pdf, id_doc) in enumerate(parsed_targets, start=1):
 
-                already_exists = id_doc in existing_ids
-                if not already_exists and preload_failed:
-                    already_exists = AIR._doc_exists_in_db(id_doc, db_path_resolved)
+                if only_docs_mode:
+                    exists_for_docs_mode = id_doc in existing_ids
+                    if not exists_for_docs_mode and preload_failed:
+                        exists_for_docs_mode = AIR._doc_exists_in_db(id_doc, db_path_resolved)
 
-                if already_exists:
-                    print(f"[SKIP] Ya existe en DB -> {id_doc} [{idx}/{total}]")
-                    set_read_progress(idx, total)
-                    continue
+                    if not exists_for_docs_mode:
+                        print(f"[SKIP] SOLO_DOCUMENTOS: no existe en DB -> {id_doc} [{idx}/{total}]")
+                        set_read_progress(idx, total)
+                        continue
+                elif not reprocess_existing:
+                    already_exists = id_doc in existing_ids
+                    if not already_exists and preload_failed:
+                        already_exists = AIR._doc_exists_in_db(id_doc, db_path_resolved)
+
+                    if already_exists:
+                        print(f"[SKIP] Ya existe en DB -> {id_doc} [{idx}/{total}]")
+                        set_read_progress(idx, total)
+                        continue
 
                 print(f"[IA] Leyendo ({idx}/{total}): {pdf}")
                 print(f"[IA] id_doc: {id_doc}")
@@ -292,9 +418,20 @@ No cierres esta ventana hasta que termine.
                     if attempt > 1:
                         print(f"[IA] Reintentando ({attempt}/{max_retries})...")
 
-                    res = AIR.read_one_pdf_with_ai(pdf, debug=debug_mode)
+                    res = AIR.read_one_pdf_with_ai(
+                        pdf,
+                        debug=debug_mode,
+                        skip_detalle=skip_detalle_on_read,
+                        only_numeric_fix=only_docs_mode,
+                    )
                     if res.get("ok"):
-                        print(f"[OK] Guardado en DB: {res.get('doc_id')} - items: {len(res.get('items', []))}")
+                        if only_docs_mode:
+                            if only_docs_update_descuento:
+                                print(f"[OK] Documento actualizado: {res.get('doc_id')} (campos selectivos + desc/imp detalle)")
+                            else:
+                                print(f"[OK] Documento actualizado: {res.get('doc_id')} (solo cabecera)")
+                        else:
+                            print(f"[OK] Guardado en DB: {res.get('doc_id')} - items: {len(res.get('items', []))}")
                         existing_ids.add(id_doc)
                         success = True
                         break
@@ -400,6 +537,28 @@ No cierres esta ventana hasta que termine.
                 f"purge_cod_ignorado(cat={purge.get('catalog_deleted', 0)}, mov={purge.get('movements_deleted', 0)})\n"
             )
 
+        def run_detalle_fecha_alignment():
+            from app.core.DTE_Recibidos import dte_loader as DL
+
+            print("[VALIDACION] Corroborando/alineando fecha_emision de detalle con documentos...\n")
+            res = DL.alinear_fecha_emision_detalle_con_documentos(apply_fix=True)
+            if not res.get("ok"):
+                print(
+                    "[WARN] No se pudo alinear fecha_emision en detalle: "
+                    f"{res.get('error', 'error_desconocido')}\n"
+                )
+                return
+
+            print(
+                "[OK] Alineacion fecha detalle: "
+                f"total_detalle={res.get('total_detalle', 0)} | "
+                f"con_documento={res.get('with_documento', 0)} | "
+                f"sin_documento={res.get('missing_documento', 0)} | "
+                f"mismatch_before={res.get('mismatches_before', 0)} | "
+                f"actualizados={res.get('updated', 0)} | "
+                f"mismatch_after={res.get('mismatches_after', 0)}\n"
+            )
+
         def ejecutar_pipeline(ruta_pdf: str, db_path: str):
             from app.core.DTE_Recibidos.pipeline_guard import (
                 acquire_pipeline_lock,
@@ -407,32 +566,177 @@ No cierres esta ventana hasta que termine.
             )
 
             lock_acquired = False
+            sync_enabled = False
+            sync_stop_event = threading.Event()
+            sync_thread = None
+            sync_batch_stage = _env_int("SUPABASE_SYNC_BATCH_STAGE", 800, min_value=1, max_value=10000)
+            sync_batch_bg = _env_int("SUPABASE_SYNC_BATCH_BG", 120, min_value=1, max_value=5000)
+            sync_interval_s = _env_int("SUPABASE_SYNC_INTERVAL_SECONDS", 8, min_value=2, max_value=300)
+            only_docs_mode = _env_bool("GUI_ONLY_DOCUMENTOS_RECALC", False)
+            skip_sii_download = _env_bool("GUI_ONLY_DOCUMENTOS_SKIP_SII", only_docs_mode)
+            only_docs_update_descuento = _env_bool("GUI_ONLY_DOCUMENTOS_UPDATE_DESCUENTO", True)
+            reprocess_existing_cfg = _env_bool("GUI_AI_REPROCESS_EXISTING_DOCS", False)
+            skip_categorizer = _env_bool("GUI_SKIP_CATEGORIZER", False)
+            align_detalle_fecha = _env_bool("GUI_ALIGN_DETALLE_FECHA_EMISION", True)
+            if only_docs_mode:
+                sync_scope_tables = ["documentos"]
+                if only_docs_update_descuento or align_detalle_fecha:
+                    sync_scope_tables.append("detalle")
+            else:
+                sync_scope_tables = None
             try:
                 lock_acquired = acquire_pipeline_lock(blocking=False)
                 if not lock_acquired:
                     print("[WARN] Ya hay otro proceso DTE ejecutandose. Intenta nuevamente en unos minutos.")
                     return
 
+                print(
+                    "[CFG] "
+                    f"GUI_ONLY_DOCUMENTOS_RECALC={only_docs_mode} | "
+                    f"GUI_ONLY_DOCUMENTOS_UPDATE_DESCUENTO={only_docs_update_descuento} | "
+                    f"GUI_ONLY_DOCUMENTOS_SKIP_SII={skip_sii_download} | "
+                    f"GUI_AI_REPROCESS_EXISTING_DOCS={reprocess_existing_cfg} | "
+                    f"GUI_SKIP_CATEGORIZER={skip_categorizer} | "
+                    f"GUI_ALIGN_DETALLE_FECHA_EMISION={align_detalle_fecha}"
+                )
+
+                if only_docs_mode:
+                    print(
+                        "[MODO] SOLO_DOCUMENTOS activo: solo se actualizara tabla 'documentos' "
+                        "(cabecera) y se omitira detalle/categorizacion/inventario."
+                    )
+
+                sync_init = init_supabase_sync(db_path)
+                sync_enabled = bool(sync_init.get("enabled", True) and sync_init.get("ok", False))
+
+                if sync_enabled:
+                    if _env_bool("SUPABASE_FORCE_LOCAL_FULL_SYNC_ON_RUN", False):
+                        try:
+                            from app.core.cloud_sync import enqueue_full_sync
+
+                            full_sync_tables = ["documentos"] if only_docs_mode else None
+                            enq = enqueue_full_sync(db_path=db_path, tables=full_sync_tables)
+                            if enq.get("ok"):
+                                print(
+                                    "[SYNC] Full-sync local autoritativo encolado: "
+                                    f"{enq.get('queued', 0)} registro(s)"
+                                    + (" en tabla 'documentos'." if only_docs_mode else ".")
+                                )
+                            else:
+                                print(f"[SYNC][WARN] No se pudo encolar full-sync: {enq.get('error', 'error_desconocido')}")
+                        except Exception as e:
+                            print(f"[SYNC][WARN] Error en full-sync local autoritativo: {e}")
+
+                    def _sync_loop():
+                        while not sync_stop_event.wait(sync_interval_s):
+                            run_supabase_sync_once(
+                                db_path,
+                                stage="background",
+                                max_items=sync_batch_bg,
+                                quiet_when_empty=True,
+                                tables=sync_scope_tables,
+                            )
+
+                    sync_thread = threading.Thread(target=_sync_loop, daemon=True)
+                    sync_thread.start()
+                    print(f"[SYNC] Worker en segundo plano activo (intervalo={sync_interval_s}s).\n")
+
                 from app.core.DTE_Recibidos.Scrap import scrapear
 
-                print("[1/6] Iniciando descarga desde SII...\n")
-
-                def dl_cb(done: int | None, total: int | None, info: str = ""):
-                    set_download_progress(done, total, info)
-
-                descargas_incompletas = scrapear(ruta_pdf, progress_cb=dl_cb)
-                finish_download_progress()
-
-                if descargas_incompletas:
-                    print("\n[WARN] Descargas incompletas detectadas. Se procesaran los PDFs disponibles.\n")
+                if skip_sii_download:
+                    finish_download_progress("(omitida)")
+                    print("[1/2] Descarga SII omitida por configuracion de SOLO_DOCUMENTOS.\n")
                 else:
-                    print("\n[OK] Descarga de DTE completada.\n")
+                    print(("[1/2]" if only_docs_mode else "[1/6]") + " Iniciando descarga desde SII...\n")
+
+                    def dl_cb(done: int | None, total: int | None, info: str = ""):
+                        set_download_progress(done, total, info)
+
+                    descargas_incompletas = scrapear(ruta_pdf, progress_cb=dl_cb)
+                    finish_download_progress()
+
+                    if descargas_incompletas:
+                        print("\n[WARN] Descargas incompletas detectadas. Se procesaran los PDFs disponibles.\n")
+                    else:
+                        print("\n[OK] Descarga de DTE completada.\n")
+
+                    if sync_enabled:
+                        run_supabase_sync_once(
+                            db_path,
+                            stage="post_descarga",
+                            max_items=sync_batch_stage,
+                            quiet_when_empty=False,
+                            tables=sync_scope_tables,
+                        )
 
                 run_ai_reader_batch(ruta_pdf, db_path)
-                run_categorizer_batch()
+                if sync_enabled:
+                    run_supabase_sync_once(
+                        db_path,
+                        stage="post_lectura_ia",
+                        max_items=sync_batch_stage,
+                        quiet_when_empty=False,
+                        tables=sync_scope_tables,
+                    )
+
+                if align_detalle_fecha:
+                    run_detalle_fecha_alignment()
+                    if sync_enabled:
+                        run_supabase_sync_once(
+                            db_path,
+                            stage="post_alineacion_fecha_detalle",
+                            max_items=sync_batch_stage,
+                            quiet_when_empty=False,
+                            tables=sync_scope_tables,
+                        )
+
+                if only_docs_mode:
+                    print("\n[OK] Flujo SOLO_DOCUMENTOS terminado correctamente.\n")
+                    return
+
+                if skip_categorizer:
+                    print("[3/6] Categorizacion omitida por configuracion (GUI_SKIP_CATEGORIZER=true).")
+                else:
+                    run_categorizer_batch()
+                    if sync_enabled:
+                        run_supabase_sync_once(
+                            db_path,
+                            stage="post_categorizacion",
+                            max_items=sync_batch_stage,
+                            quiet_when_empty=False,
+                            tables=sync_scope_tables,
+                        )
+
                 run_codigo_backfill_insumos(ruta_pdf, db_path)
+                if sync_enabled:
+                    run_supabase_sync_once(
+                        db_path,
+                        stage="post_backfill_codigo",
+                        max_items=sync_batch_stage,
+                        quiet_when_empty=False,
+                        tables=sync_scope_tables,
+                    )
+
                 run_unidad_backfill_debug(db_path)
+                if sync_enabled:
+                    run_supabase_sync_once(
+                        db_path,
+                        stage="post_backfill_unidad",
+                        max_items=sync_batch_stage,
+                        quiet_when_empty=False,
+                        tables=sync_scope_tables,
+                    )
+
                 run_inventory_autosync(db_path)
+                if sync_enabled:
+                    run_supabase_sync_once(
+                        db_path,
+                        stage="post_inventario",
+                        max_items=sync_batch_stage,
+                        quiet_when_empty=False,
+                        tables=sync_scope_tables,
+                    )
+
                 print("\n[OK] Flujo completo terminado correctamente.\n")
 
             except ModuleNotFoundError:
@@ -441,6 +745,36 @@ No cierres esta ventana hasta que termine.
             except Exception as e:
                 print(f"[ERROR] Fallo durante la actualizacion:\n{e}")
             finally:
+                if sync_thread is not None:
+                    sync_stop_event.set()
+                    try:
+                        sync_thread.join(timeout=2.0)
+                    except Exception:
+                        pass
+
+                if sync_enabled:
+                    run_supabase_sync_drain(
+                        db_path,
+                        stage="final",
+                        max_items=sync_batch_stage,
+                        max_rounds=12,
+                        tables=sync_scope_tables,
+                    )
+                    final_stats = run_supabase_sync_once(
+                        db_path,
+                        stage="resumen_final",
+                        max_items=sync_batch_stage,
+                        quiet_when_empty=False,
+                        tables=sync_scope_tables,
+                    )
+                    if final_stats.get("ok") and final_stats.get("enabled", True):
+                        pending = int(final_stats.get("pending", 0) or 0)
+                        if pending > 0:
+                            print(
+                                "[SYNC][WARN] Quedaron cambios pendientes de subir a Supabase: "
+                                f"{pending}. Se reintentaran en la siguiente ejecucion."
+                            )
+
                 if lock_acquired:
                     release_pipeline_lock()
 
@@ -795,6 +1129,29 @@ No cierres esta ventana hasta que termine.
                     print("\n[WARN] No se pudo reentrenar el modelo.")
                 else:
                     print("\n[INFO] No fue necesario reentrenar el modelo (sin cambios de categoria).")
+
+                try:
+                    from app.core.cloud_sync import initialize_supabase_sync, sync_pending_changes
+
+                    init = initialize_supabase_sync(db_path=DB_PATH, log=print)
+                    if init.get("enabled", True) and init.get("ok", False):
+                        try:
+                            batch = int(os.getenv("SUPABASE_SYNC_BATCH_STAGE", "800"))
+                        except Exception:
+                            batch = 800
+                        batch = max(1, min(10000, batch))
+                        stats = sync_pending_changes(db_path=DB_PATH, max_items=batch, log=print)
+                        if stats.get("ok"):
+                            print(
+                                "[SYNC] Importacion->Supabase: "
+                                f"ok={stats.get('processed', 0)} "
+                                f"fail={stats.get('failed', 0)} "
+                                f"pending={stats.get('pending', 0)}"
+                            )
+                        else:
+                            print(f"[SYNC][WARN] No se pudo subir cambios de importacion: {stats.get('error', 'error_desconocido')}")
+                except Exception as sync_error:
+                    print(f"[SYNC][WARN] Error durante sync post-import: {sync_error}")
 
             except Exception as e:
                 print(f"[ERROR] Fallo al importar: {e}")

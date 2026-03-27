@@ -800,7 +800,12 @@ def _print_debug_insert_preview(pdf_path: str, datos_raw: Dict[str, Any]) -> Non
 
     print("=" * 110 + "\n")
 
-def read_one_pdf_with_ai(pdf_path: str, debug: bool = False) -> Dict[str, Any]:
+def read_one_pdf_with_ai(
+    pdf_path: str,
+    debug: bool = False,
+    skip_detalle: bool = False,
+    only_numeric_fix: bool = False,
+) -> Dict[str, Any]:
     img_path = _rasterize_first_page(pdf_path)
     if not img_path:
         return {"ok": False, "error": "raster_failed"}
@@ -823,11 +828,15 @@ def read_one_pdf_with_ai(pdf_path: str, debug: bool = False) -> Dict[str, Any]:
         doc = doc_ai.get("doc", {}) or {}
         refs = doc_ai.get("referencias", []) or []
 
-        # 2) Detalle
-        det_ai = analizar_detalle_desde_imagen(img_path)
-        if not det_ai.get("ok"):
-            return {"ok": False, "error": det_ai.get("error", "ai_error")}
-        items = det_ai.get("items", [])
+        # 2) Detalle (opcional)
+        if skip_detalle:
+            det_ai = {"ok": True, "items": []}
+            items = []
+        else:
+            det_ai = analizar_detalle_desde_imagen(img_path)
+            if not det_ai.get("ok"):
+                return {"ok": False, "error": det_ai.get("error", "ai_error")}
+            items = det_ai.get("items", [])
 
         if debug:
             print("=== DOC AI ===")
@@ -853,6 +862,7 @@ def read_one_pdf_with_ai(pdf_path: str, debug: bool = False) -> Dict[str, Any]:
             "Total": doc.get("monto_total", "0"),
             "Referencia": referencia_txt,
             "DTE_referencia": dte_ref_txt,
+            "__only_numeric_fix__": bool(only_numeric_fix),
             "__items_detalle__": items,
         }
 
